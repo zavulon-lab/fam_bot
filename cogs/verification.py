@@ -1,8 +1,11 @@
 import disnake
+from disnake.ext import commands
 from disnake import Embed, Interaction, ButtonStyle, TextInputStyle, SelectOption
 from disnake.ui import View, Select, TextInput, Button, button, Modal
 from datetime import datetime
 from constants import *
+
+# === ВАШИ КЛАССЫ (БЕЗ ИЗМЕНЕНИЙ) ===
 
 class VerificationFinalDecisionView(View):
     def __init__(self, user: disnake.User):
@@ -215,3 +218,25 @@ class VerificationView(View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(VerificationSelect())
+
+# === ДОБАВЛЕНО: КЛАСС COG ДЛЯ ЗАГРУЗКИ ===
+class VerificationCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Автоматическая отправка меню в канал запросов
+        channel = self.bot.get_channel(VERIFICATION_REQUEST_CHANNEL_ID)
+        if channel:
+            await channel.purge(limit=10)
+            embed = Embed(
+                title="Верификация",
+                description="Для получения доступа к каналам сервера необходимо пройти верификацию.",
+                color=0x2B2D31
+            )
+            await channel.send(embed=embed, view=VerificationView())
+            print("[Verification] Меню верификации обновлено.")
+
+def setup(bot):
+    bot.add_cog(VerificationCog(bot))

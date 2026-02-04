@@ -4,7 +4,6 @@ from disnake import Embed, Interaction, ButtonStyle
 from disnake.ui import View, Button, button
 from constants import PERSONAL_CHANNEL_REQUEST_ID
 
-# Импорты из новых файлов
 from .vacation import VacationActionsView
 from .portfolio import PortfolioView
 from .verification import VerificationView
@@ -24,6 +23,7 @@ class MainMenuButtons(View):
             ),
             color=0x2B2D31
         )
+        # Картинка thumbnail
         embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3143/3143636.png")
         await interaction.response.send_message(embed=embed, view=VacationActionsView(), ephemeral=True)
 
@@ -54,7 +54,8 @@ class MainMenuButtons(View):
             ),
             color=0x3A3B3C,
         )
-        embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
+        if interaction.guild.icon:
+            embed.set_thumbnail(url=interaction.guild.icon.url)
         embed.set_footer(text="Administration Cartel Famq")
         
         await interaction.response.send_message(embed=embed, view=VerificationView(), ephemeral=True)
@@ -72,11 +73,13 @@ class PersonalCog(commands.Cog):
                 embed = Embed(
                     title="⚙️ Взаимодействие с функционалом бота",
                     description=(
-                        "🏖️ = Взять долгосрочный отпуск, отдых от игры\n"
-                        "💼 = Создание портфеля, получить Tier\n"
+                        "📅 **Отпуск** — Взять долгосрочный отпуск, отдых от игры\n"
+                        "📹 **Тир** — Создание портфеля, получить Tier роль\n"
+                        "✅ **Верификация** — Пройти проверку для доступа к каптам"
                     ),
                     color=0x2B2D31
                 )
+                # Ваша картинка
                 embed.set_image(url="https://media.discordapp.net/attachments/1336423985794682974/1336423986381754409/6FDCFF59-EFBB-4D26-9E57-50B0F3D61B50.jpg") 
                 await channel.send(embed=embed, view=MainMenuButtons())
                 print("✅ [Personal] Главное меню обновлено")
