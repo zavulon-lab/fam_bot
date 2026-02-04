@@ -1,136 +1,63 @@
 import disnake
 from disnake.ext import commands
-from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, CategoryChannel
-from disnake.ui import View, button, Button
-from disnake.errors import HTTPException
-from datetime import datetime
-from constants import *
-from database import get_private_channel, set_private_channel
+from disnake import Embed, Interaction, ButtonStyle
+from disnake.ui import View, Button, button
+from constants import PERSONAL_CHANNEL_REQUEST_ID
 
-class PersonalChannelModal(disnake.ui.Modal):
-    def __init__(self):
-        components = [
-            disnake.ui.TextInput(
-                label="Ссылка на материал (YouTube/Imgur)",
-                custom_id="media_link",
-                style=TextInputStyle.short,
-                required=True,
-                placeholder="https://www.youtube.com/... или https://imgur.com/...",
-            )
-        ]
-        super().__init__(title="Запрос личного канала", components=components, timeout=300)
+# Импорты из новых файлов
+from .vacation import VacationActionsView
+from .portfolio import PortfolioView
+from .verification import VerificationView
 
-    async def callback(self, interaction: disnake.ModalInteraction):
-        try:
-            guild = interaction.guild
-            if not guild:
-                await interaction.response.send_message("❌ Ошибка: сервер не найден!", ephemeral=True)
-                return
-
-            category = guild.get_channel(CATEGORY_ID)
-            if not category or not isinstance(category, CategoryChannel):
-                await interaction.response.send_message("❌ Категория не найдена!", ephemeral=True)
-                return
-
-            media_link = interaction.text_values["media_link"]
-
-            # Логика с лимитом 50 каналов
-            if len(category.channels) >= 50:
-                category_name_base = category.name if category else "Личные каналы"
-                new_category = None
-                category_index = 1
-
-                for cat in guild.categories:
-                    if cat.name.startswith(category_name_base) and len(cat.channels) < 50:
-                        new_category = cat
-                        break
-
-                if not new_category:
-                    while True:
-                        new_category_name = f"{category_name_base} {category_index}" if category_index > 1 else category_name_base
-                        try:
-                            new_category = await guild.create_category(
-                                name=new_category_name, reason="Достигнут лимит каналов в категории (50)"
-                            )
-                            if category:
-                                for target, permission_overwrite in category.overwrites.items():
-                                    await new_category.set_permissions(target, overwrite=permission_overwrite)
-                            break
-                        except HTTPException as http_err:
-                            if http_err.code == 50035 and "Maximum number" in str(http_err):
-                                category_index += 1
-                                continue
-                            elif http_err.code == 50035 and "Guild has reached" in str(http_err):
-                                await interaction.response.send_message(
-                                    "❌ Сервер достиг максимального количества каналов!", ephemeral=True
-                                )
-                                return
-                            raise
-
-                category = new_category
-
-            user_id = str(interaction.user.id)
-            personal_channel = None
-
-            channel_id = get_private_channel(user_id)
-            if channel_id:
-                personal_channel = guild.get_channel(channel_id)
-
-            if not personal_channel:
-                personal_channel = await guild.create_text_channel(
-                    name=f"{interaction.user.display_name}",
-                    category=category,
-                    reason="Создание личного канала",
-                )
-                await personal_channel.set_permissions(guild.default_role, view_channel=False)
-                await personal_channel.set_permissions(interaction.user, view_channel=True)
-
-                role = guild.get_role(PRIVATE_THREAD_ROLE_ID)
-                if role:
-                    await personal_channel.set_permissions(role, view_channel=True)
-
-                set_private_channel(user_id, personal_channel.id)
-
-            # Эмбед с материалом
-            embed = Embed(
-                title="🔹 Новый материал",
-                description=(
-                    f"**Автор:** {interaction.user.mention}\n"
-                    f"**Ссылка:** {media_link}\n"
-                ),
-                color=0x3A3B3C,
-                timestamp=datetime.now(),
-            )
-            embed.set_footer(text=f"Размещено {interaction.user.display_name}")
-            embed.set_thumbnail(url=interaction.user.display_avatar.url)
-
-            await personal_channel.send(embed=embed)
-
-            # Подтверждение
-            confirm_embed = Embed(
-                title="✅ Материал размещён!",
-                description=f"Ваш материал опубликован в канале {personal_channel.mention}.",
-                color=0x3BA55D,
-                timestamp=datetime.now(),
-            )
-            await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
-
-        except Exception as e:
-            print(f"Ошибка в PersonalChannelModal: {e}")
-            error_embed = Embed(
-                title="❌ Ошибка",
-                description="Произошла ошибка при создании канала или размещении материала.",
-                color=0xFF0000,
-            )
-            await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-class PersonalChannelButtons(View):
+class MainMenuButtons(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @button(label="💬 Запросить канал", style=ButtonStyle.primary, custom_id="personal_channel_button")
-    async def personal_channel_button(self, button: Button, interaction: Interaction):
-        await interaction.response.send_modal(PersonalChannelModal())
+    @button(label="Отпуск", style=ButtonStyle.secondary, emoji="📅", custom_id="btn_main_vacation")
+    async def vacation_btn(self, button: Button, interaction: Interaction):
+        embed = Embed(
+            title="📅 Подать заявку на отпуск",
+            description=(
+                "👇 Устали от игры или есть другие причины взять паузу? Просто заполните анкету — её рассмотрят наши модераторы.\n\n"
+                "• Если заявка будет одобрена, бот автоматически снимет с вас все текущие роли и выдаст роль @Inactive.\n"
+                "• Когда будете готовы вернуться, нажмите кнопку \"Вернуться из отпуска\"."
+            ),
+            color=0x2B2D31
+        )
+        embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3143/3143636.png")
+        await interaction.response.send_message(embed=embed, view=VacationActionsView(), ephemeral=True)
+
+    @button(label="Получение Tier", style=ButtonStyle.primary, emoji="📹", custom_id="btn_main_tier")
+    async def tier_btn(self, button: Button, interaction: Interaction):
+        embed = Embed(
+            title="📁 Создание портфеля",
+            description=(
+                "• В приватном канале люди с опытом оценят ваши откаты и решат — повысить вам тир.\n"
+                "• Видеоматериалы желательно заливать на [YouTube](https://youtube.com), [Rutube](https://rutube.ru)"
+            ),
+            color=0x2B2D31 
+        )
+        embed.set_thumbnail(url="https://em-content.zobj.net/source/microsoft-teams/337/file-folder_1f4c1.png") 
+        await interaction.response.send_message(embed=embed, view=PortfolioView(), ephemeral=True)
+
+    @button(label="Верификация", style=ButtonStyle.success, emoji="✅", custom_id="btn_main_verif")
+    async def verif_btn(self, button: Button, interaction: Interaction):
+        embed = Embed(
+            title="🔍 Верификация и проверка на ПО",
+            description=(
+                "Для доступа к закрытым мероприятиям (капты, турниры) необходимо пройти полную проверку.\n\n"
+                "**Этапы проверки:**\n"
+                "1️⃣ **Запрос:** Нажмите «Подать запрос» в меню ниже и укажите причину.\n"
+                "2️⃣ **Рассмотрение:** Модераторы проверят вашу заявку.\n"
+                "3️⃣ **Проверка:** Вас вызовут в голосовой канал для проверки на стороннее ПО (читы, макросы).\n\n"
+                "⚠️ *Любая попытка скрыть софт, отказ от проверки или выход из игры во время вызова приведет к бану и ЧС семьи.*"
+            ),
+            color=0x3A3B3C,
+        )
+        embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
+        embed.set_footer(text="Administration Cartel Famq")
+        
+        await interaction.response.send_message(embed=embed, view=VerificationView(), ephemeral=True)
 
 class PersonalCog(commands.Cog):
     def __init__(self, bot):
@@ -138,21 +65,23 @@ class PersonalCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        """Настройка канала личных каналов при запуске"""
         try:
-            personal_channel = self.bot.get_channel(PERSONAL_CHANNEL_REQUEST_ID)
-            if personal_channel:
-                await personal_channel.purge(limit=10)
+            channel = self.bot.get_channel(PERSONAL_CHANNEL_REQUEST_ID)
+            if channel:
+                await channel.purge(limit=10)
                 embed = Embed(
-                    title="💬 Личные каналы",
-                    description="Запросите создание личного канала для размещения ваших материалов.",
-                    color=0x3A3B3C,
+                    title="⚙️ Взаимодействие с функционалом бота",
+                    description=(
+                        "🏖️ = Взять долгосрочный отпуск, отдых от игры\n"
+                        "💼 = Создание портфеля, получить Tier\n"
+                    ),
+                    color=0x2B2D31
                 )
-                await personal_channel.send(embed=embed)
-                await personal_channel.send(view=PersonalChannelButtons())
-                print("✅ [Personal] Канал личных каналов настроен")
+                embed.set_image(url="https://media.discordapp.net/attachments/1336423985794682974/1336423986381754409/6FDCFF59-EFBB-4D26-9E57-50B0F3D61B50.jpg") 
+                await channel.send(embed=embed, view=MainMenuButtons())
+                print("✅ [Personal] Главное меню обновлено")
         except Exception as e:
-            print(f"❌ [Personal] Ошибка при настройке: {e}")
+            print(f"❌ [Personal] Ошибка: {e}")
 
 def setup(bot):
     bot.add_cog(PersonalCog(bot))

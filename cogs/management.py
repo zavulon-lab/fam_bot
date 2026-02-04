@@ -1,295 +1,250 @@
 import disnake
 from disnake.ext import commands
-from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, CategoryChannel, TextChannel, SelectOption
-from disnake.ui import View, button, Button, Select
-from disnake.errors import NotFound
+from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, ChannelType, SelectOption
+from disnake.ui import View, button, Button, StringSelect, Modal, TextInput
 from datetime import datetime
 from constants import *
-from database import add_created_channel, get_private_channel, set_private_channel, channel_exists, delete_created_channel
+from database import get_private_channel, set_private_channel
 
-class RollbackForm(disnake.ui.Modal):
-    def __init__(self, channel: TextChannel):
-        self.channel = channel
 
+# --- 1. ФОРМА ОТКАТА (ФИНАЛЬНЫЙ ШАГ) ---
+class RollbackForm(Modal):
+    def __init__(self, target_thread: disnake.Thread):
+        self.target_thread = target_thread
+        
         components = [
-            disnake.ui.TextInput(
-                label="Детали отката",
+            TextInput(
+                label="Ссылка на откат и таймкоды",
                 custom_id="rollback_details",
                 style=TextInputStyle.paragraph,
                 required=True,
-                placeholder="Опишите детали отката...",
+                placeholder="Ссылка: https://...\nТаймкоды: 0:45 нарушение...",
             )
         ]
-        super().__init__(title="Форма отката", components=components, timeout=300)
+        super().__init__(title="Отправка отката", components=components, timeout=300)
 
     async def callback(self, interaction: disnake.ModalInteraction):
         await interaction.response.defer(ephemeral=True)
+        
+        details = interaction.text_values["rollback_details"]
 
+        # Отправляем в выбранную ветку
+        public_embed = Embed(
+            description=f"**Отправитель:** {interaction.user.mention}\n\n{details}",
+            color=0x3A3B3C,
+            timestamp=datetime.now()
+        )
+        public_embed.set_author(name=f"Откат от {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+        
+        await self.target_thread.send(embed=public_embed)
+
+        # Логика ПРИВАТНОГО канала (дублирование)
         try:
-            guild = interaction.guild
-            if not guild:
-                await interaction.followup.send("❌ Ошибка: сервер не найден!", ephemeral=True)
-                return
-
-            rollback_details = interaction.text_values["rollback_details"]
-
-            # Эмбед для публичного канала
-            public_embed = Embed(
-                title="🔄 Откат отправлен",
-                description=(
-                    f"**Детали:**\n{rollback_details}\n\n"
-                    f"**Отправитель:** {interaction.user.mention}"
-                ),
-                color=0x3A3B3C,
-                timestamp=datetime.now(),
-            )
-            public_embed.set_footer(text=f"Откат от {interaction.user.display_name}")
-            await self.channel.send(embed=public_embed)
-
-            private_channel = guild.get_channel(PRIVATE_CHANNEL_ID)
-            if not private_channel:
-                await interaction.followup.send("❌ Приватный канал не найден!", ephemeral=True)
-                return
-
             user_id = str(interaction.user.id)
             channel_id = get_private_channel(user_id)
+            private_channel = interaction.guild.get_channel(channel_id) if channel_id else None
 
-            if channel_id:
-                private_channel_instance = guild.get_channel(channel_id)
-            else:
-                private_channel_instance = None
+            if not private_channel:
+                category = interaction.guild.get_channel(CATEGORY_ID)
+                if category:
+                    private_channel = await interaction.guild.create_text_channel(
+                        name=interaction.user.name,
+                        category=category,
+                        reason="Личный канал"
+                    )
+                    await private_channel.set_permissions(interaction.guild.default_role, view_channel=False)
+                    await private_channel.set_permissions(interaction.user, view_channel=True)
+                    set_private_channel(user_id, private_channel.id)
 
-            if not private_channel_instance:
-                private_channel_instance = await guild.create_text_channel(
-                    name=f"{interaction.user.name}",
-                    category=guild.get_channel(CATEGORY_ID),
-                    reason="Создание приватного канала",
+            if private_channel:
+                private_embed = Embed(
+                    title="✅ Откат отправлен",
+                    description=f"**Ветка:** {self.target_thread.mention}\n**Текст:**\n{details}",
+                    color=0x3BA55D
                 )
-                await private_channel_instance.set_permissions(guild.default_role, view_channel=False)
-                await private_channel_instance.set_permissions(interaction.user, view_channel=True)
-
-                role = guild.get_role(PRIVATE_THREAD_ROLE_ID)
-                if role:
-                    await private_channel_instance.set_permissions(role, view_channel=True)
-
-                set_private_channel(user_id, private_channel_instance.id)
-
-            # Эмбед для приватного канала
-            private_embed = Embed(
-                title="🔄 Копия отката",
-                description=(
-                    f"**Канал:** {self.channel.mention}\n"
-                    f"**Детали:**\n{rollback_details}"
-                ),
-                color=0x3A3B3C,
-                timestamp=datetime.now(),
-            )
-            private_embed.set_footer(text=f"Откат от {interaction.user.display_name}")
-            await private_channel_instance.send(embed=private_embed)
-
-            # Подтверждение
-            confirm_embed = Embed(
-                title="✅ Откат отправлен!",
-                description=f"Откат опубликован в {self.channel.mention} и продублирован в ваш личный канал {private_channel_instance.mention}.",
-                color=0x3BA55D,
-                timestamp=datetime.now(),
-            )
-            await interaction.followup.send(embed=confirm_embed, ephemeral=True)
-
-        except NotFound:
-            await interaction.followup.send("❌ Канал не найден. Возможно, он был удалён.", ephemeral=True)
+                await private_channel.send(embed=private_embed)
         except Exception as e:
-            print(f"Ошибка в RollbackForm: {e}")
-            error_embed = Embed(
-                title="❌ Ошибка",
-                description="Произошла ошибка при отправке отката.",
-                color=0xFF0000,
-            )
-            await interaction.followup.send(embed=error_embed, ephemeral=True)
+            print(f"Ошибка с личным каналом: {e}")
 
-class CreateChannelModal(disnake.ui.Modal):
-    def __init__(self, category: CategoryChannel, bot):
-        self.category = category
-        self.bot = bot
+        await interaction.followup.send(f"✅ Откат успешно отправлен в ветку {self.target_thread.mention}", ephemeral=True)
 
-        components = [
-            disnake.ui.TextInput(
-                label="Название канала",
-                custom_id="nickname",
-                style=TextInputStyle.short,
-                required=True,
-                max_length=50,
-                placeholder="например: my-channel",
-            )
-        ]
+
+# --- 2. ВЫБОР КОНКРЕТНОЙ ВЕТКИ ---
+class ThreadSelect(StringSelect):
+    def __init__(self, threads):
+        options = []
+        # Сортируем ветки (сначала новые) и берем последние 25
+        sorted_threads = sorted(threads, key=lambda t: t.created_at, reverse=True)[:25]
+        
+        for thread in sorted_threads:
+            options.append(SelectOption(
+                label=thread.name[:100], 
+                value=str(thread.id), 
+                emoji="#️⃣"
+            ))
+        
+        if not options:
+            options.append(SelectOption(label="Нет активных веток", value="none"))
 
         super().__init__(
-            title="Создание канала",
-            components=components,
-            timeout=300,
-        )
-
-    async def callback(self, interaction: disnake.ModalInteraction):
-        try:
-            if len(self.category.channels) >= 50:
-                await interaction.response.send_message("❌ В этой категории уже 50 каналов!", ephemeral=True)
-                return
-
-            nickname = interaction.text_values["nickname"]
-            channel_name = nickname.lower().replace(" ", "-")
-
-            channel = await interaction.guild.create_text_channel(
-                name=channel_name,
-                category=self.category,
-                reason="Создание канала администратором",
-            )
-
-            add_created_channel(channel.id, interaction.user.id, channel.name)
-            self.bot.created_channels_cache[channel.id] = {"channel": channel, "creator": interaction.user}
-
-            # Подтверждение с эмбедом
-            embed = Embed(
-                title="✅ Канал создан",
-                description=(
-                    f"**Название:** `{nickname}`\n"
-                    f"**Категория:** {self.category.name}\n"
-                    f"**Создатель:** {interaction.user.mention}\n"
-                    f"**Канал:** {channel.mention}"
-                ),
-                color=0x3BA55D,
-                timestamp=datetime.now(),
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        except Exception as e:
-            print(f"Ошибка в CreateChannelModal: {e}")
-            error_embed = Embed(
-                title="❌ Ошибка",
-                description="Произошла ошибка при создании канала.",
-                color=0xFF0000,
-            )
-            await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-class ChannelSelect(Select):
-    def __init__(self, bot):
-        self.bot = bot
-        super().__init__(
-            placeholder="Выберите категорию...",
-            options=[
-                SelectOption(label="Категория 1", value=str(CATEGORY_1_ID)),
-                SelectOption(label="Категория 2", value=str(CATEGORY_2_ID)),
-            ],
+            placeholder="Выберите событие (ветку)...",
+            options=options,
+            min_values=1,
+            max_values=1,
+            disabled=len(options) == 0 or options[0].value == "none"
         )
 
     async def callback(self, interaction: Interaction):
-        selected_category_id = int(self.values[0])
-        selected_category = interaction.guild.get_channel(selected_category_id)
-
-        if not selected_category or not isinstance(selected_category, CategoryChannel):
-            await interaction.response.send_message("❌ Категория не найдена!", ephemeral=True)
+        if self.values[0] == "none":
+            await interaction.response.send_message("❌ Нет веток для выбора.", ephemeral=True)
+            return
+            
+        thread_id = int(self.values[0])
+        target_thread = interaction.guild.get_thread(thread_id)
+        
+        if not target_thread:
+            await interaction.response.send_message("❌ Ветка не найдена (возможно, удалена/в архиве).", ephemeral=True)
             return
 
-        if len(selected_category.channels) >= 50:
-            await interaction.response.send_message("❌ В этой категории уже 50 каналов!", ephemeral=True)
+        await interaction.response.send_modal(RollbackForm(target_thread))
+
+
+class ThreadSelectView(View):
+    def __init__(self, threads):
+        super().__init__(timeout=60)
+        self.add_item(ThreadSelect(threads))
+
+
+# --- 3. ВЫБОР ТИПА МЕРОПРИЯТИЯ (MCL / CAPT) ---
+class CategorySelect(StringSelect):
+    def __init__(self):
+        options = [
+            SelectOption(label="MCL", value="mcl", description="Мероприятия MCL", emoji="🛡️"),
+            SelectOption(label="Капт", value="capt", description="Капты", emoji="⚔️"),
+        ]
+        super().__init__(placeholder="Выберите тип мероприятия...", options=options)
+
+    async def callback(self, interaction: Interaction):
+        choice = self.values[0]
+        channel_id = MCL_CHANNEL_ID if choice == "mcl" else CAPT_CHANNEL_ID
+        channel = interaction.guild.get_channel(channel_id)
+        
+        if not channel:
+            await interaction.response.send_message("❌ Ошибка настройки: Канал не найден.", ephemeral=True)
             return
 
-        await interaction.response.send_modal(CreateChannelModal(selected_category, self.bot))
+        # Ищем активные ветки в канале
+        # Важно: threads возвращает только активные ветки. Если ветка в архиве, её тут не будет.
+        threads = channel.threads
+        
+        if not threads:
+            await interaction.response.send_message(
+                f"⚠️ В канале {channel.mention} нет активных веток (событий).\nПопросите администратора создать ветку.", 
+                ephemeral=True
+            )
+            return
+            
+        await interaction.response.send_message(
+            "Выберите конкретное событие:", 
+            view=ThreadSelectView(threads), 
+            ephemeral=True
+        )
 
-class ChannelSelectView(View):
-    def __init__(self, channels_category1=None, channels_category2=None):
-        super().__init__()
 
-        if channels_category1 is None:
-            channels_category1 = []
-        if channels_category2 is None:
-            channels_category2 = []
+class CategorySelectView(View):
+    def __init__(self):
+        super().__init__(timeout=60)
+        self.add_item(CategorySelect())
 
-        if channels_category1:
-            for i in range(0, len(channels_category1), 25):
-                group = channels_category1[i : i + 25]
-                options_category1 = [SelectOption(label=channel.name, value=str(channel.id)) for channel in group]
-                select_category1 = Select(
-                    custom_id=f"category1_select_{i}", placeholder=f"Категория 1 (каналы {i + 1}+)", options=options_category1
+
+# --- 4. АДМИНСКАЯ ФОРМА СОЗДАНИЯ ВЕТКИ ---
+class AdminCreateThreadModal(Modal):
+    def __init__(self, target_channel: disnake.TextChannel):
+        self.target_channel = target_channel
+        components = [
+            TextInput(
+                label="Название события",
+                custom_id="thread_name",
+                style=TextInputStyle.short,
+                required=True,
+                max_length=50,
+                placeholder="Например: Капт против FamQ 18:00"
+            )
+        ]
+        super().__init__(title="Создание события", components=components)
+
+    async def callback(self, interaction: disnake.ModalInteraction):
+        name = interaction.text_values["thread_name"]
+        
+        try:
+            thread = await self.target_channel.create_thread(
+                name=name,
+                type=ChannelType.public_thread,
+                reason=f"Создано администратором {interaction.user}"
+            )
+            
+            # Отправляем стартовое сообщение, чтобы ветка не была пустой
+            await thread.send(
+                embed=Embed(
+                    description=f"📍 **Событие создано.**\nЗагружайте откаты сюда через панель управления.\n**Администратор:** {interaction.user.mention}",
+                    color=0x5865F2
                 )
-                select_category1.callback = self.on_select_category1
-                self.add_item(select_category1)
+            )
+            
+            await interaction.response.send_message(f"✅ Ветка события создана: {thread.mention}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
-        if channels_category2:
-            for i in range(0, len(channels_category2), 25):
-                group = channels_category2[i : i + 25]
-                options_category2 = [SelectOption(label=channel.name, value=str(channel.id)) for channel in group]
-                select_category2 = Select(
-                    custom_id=f"category2_select_{i}", placeholder=f"Категория 2 (каналы {i + 1}+)", options=options_category2
-                )
-                select_category2.callback = self.on_select_category2
-                self.add_item(select_category2)
 
-    async def on_select_category1(self, interaction: Interaction):
-        selected_channel_id = int(interaction.data["values"][0])
-        selected_channel = interaction.guild.get_channel(selected_channel_id)
+class AdminChannelSelect(StringSelect):
+    def __init__(self):
+        options = [
+            SelectOption(label="MCL", value="mcl", emoji="🛡️"),
+            SelectOption(label="Капт", value="capt", emoji="⚔️"),
+        ]
+        super().__init__(placeholder="Где создать событие?", options=options)
 
-        if selected_channel:
-            await interaction.response.send_modal(RollbackForm(selected_channel))
+    async def callback(self, interaction: Interaction):
+        channel_id = MCL_CHANNEL_ID if self.values[0] == "mcl" else CAPT_CHANNEL_ID
+        channel = interaction.guild.get_channel(channel_id)
+        if channel:
+            await interaction.response.send_modal(AdminCreateThreadModal(channel))
         else:
-            await interaction.response.send_message("❌ Канал не найден.", ephemeral=True)
+            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
 
-    async def on_select_category2(self, interaction: Interaction):
-        selected_channel_id = int(interaction.data["values"][0])
-        selected_channel = interaction.guild.get_channel(selected_channel_id)
 
-        if selected_channel:
-            await interaction.response.send_modal(RollbackForm(selected_channel))
-        else:
-            await interaction.response.send_message("❌ Канал не найден.", ephemeral=True)
+class AdminChannelSelectView(View):
+    def __init__(self):
+        super().__init__(timeout=60)
+        self.add_item(AdminChannelSelect())
 
+
+# --- 5. ГЛАВНОЕ МЕНЮ ---
 class MainChannelButtons(View):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @button(label="🔄 Откат", style=ButtonStyle.success, custom_id="send_rollback_button")
-    async def send_rollback_button(self, button: Button, interaction: Interaction):
-        try:
-            await interaction.response.defer(ephemeral=True)
+    @button(label="🔄 Оформить откат", style=ButtonStyle.success, custom_id="btn_user_rollback")
+    async def user_rollback_btn(self, button: Button, interaction: Interaction):
+        await interaction.response.send_message(
+            "Выберите тип мероприятия:", 
+            view=CategorySelectView(), 
+            ephemeral=True
+        )
 
-            category1 = interaction.guild.get_channel(CATEGORY_1_ID)
-            category2 = interaction.guild.get_channel(CATEGORY_2_ID)
-
-            if not category1 or not category2:
-                await interaction.followup.send("❌ Категории не найдены!", ephemeral=True)
-                return
-
-            channels_category1 = sorted(
-                [channel for channel in category1.channels if isinstance(channel, TextChannel)],
-                key=lambda x: x.created_at,
-                reverse=True,
-            )
-            channels_category2 = sorted(
-                [channel for channel in category2.channels if isinstance(channel, TextChannel)],
-                key=lambda x: x.created_at,
-                reverse=True,
-            )
-
-            if not channels_category1 and not channels_category2:
-                await interaction.followup.send("❌ Нет каналов для отката!", ephemeral=True)
-                return
-
-            view = ChannelSelectView(channels_category1, channels_category2)
-            await interaction.followup.send("Выберите канал для отката:", view=view, ephemeral=True)
-
-        except Exception as e:
-            print(f"Ошибка в send_rollback_button: {e}")
-            await interaction.followup.send("❌ Произошла ошибка.", ephemeral=True)
-
-    @button(label="➕ Создать канал", style=ButtonStyle.primary, custom_id="create_channel_button")
-    async def create_channel_button(self, button: Button, interaction: Interaction):
+    @button(label="➕ Создать событие", style=ButtonStyle.primary, custom_id="btn_admin_create_thread")
+    async def admin_create_btn(self, button: Button, interaction: Interaction):
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ У вас нет прав!", ephemeral=True)
+            await interaction.response.send_message("⛔ Только для администраторов!", ephemeral=True)
             return
 
-        view = View()
-        view.add_item(ChannelSelect(self.bot))
-        await interaction.response.send_message("Выберите категорию:", view=view, ephemeral=True)
+        await interaction.response.send_message(
+            "В каком канале создать ветку?", 
+            view=AdminChannelSelectView(), 
+            ephemeral=True
+        )
+
 
 class ManagementCog(commands.Cog):
     def __init__(self, bot):
@@ -297,30 +252,22 @@ class ManagementCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        """Настройка главного канала при запуске"""
         try:
             main_channel = self.bot.get_channel(MAIN_CHANNEL_ID)
             if main_channel:
                 await main_channel.purge(limit=10)
                 embed = Embed(
-                    title="🎮 Главная панель",
-                    description="Выберите действие из списка ниже:",
-                    color=0x3A3B3C,
+                    title="🎮 Управление событиями",
+                    description=(
+                        "**Игрокам:** Нажмите `🔄 Оформить откат`, выберите событие и прикрепите ссылку.\n"
+                        "**Админам:** Нажмите `➕ Создать событие`, чтобы открыть новую ветку для откатов."
+                    ),
+                    color=0x2B2D31,
                 )
-                await main_channel.send(embed=embed)
-                await main_channel.send(view=MainChannelButtons(self.bot))
-                print("✅ [Management] Главный канал настроен")
+                await main_channel.send(embed=embed, view=MainChannelButtons(self.bot))
+                print("✅ [Management] Панель обновлена")
         except Exception as e:
-            print(f"❌ [Management] Ошибка при настройке: {e}")
-
-    @commands.Cog.listener()
-    async def on_channel_delete(self, channel):
-        """Удаление канала из кэша и БД при удалении"""
-        if channel.id in self.bot.created_channels_cache:
-            del self.bot.created_channels_cache[channel.id]
-        
-        if channel_exists(channel.id):
-            delete_created_channel(channel.id)
+            print(f"❌ [Management] Ошибка: {e}")
 
 def setup(bot):
     bot.add_cog(ManagementCog(bot))

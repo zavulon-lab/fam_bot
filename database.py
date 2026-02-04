@@ -61,7 +61,20 @@ def init_db():
             )
         """)
         
+        # --- НОВАЯ ТАБЛИЦА ДЛЯ ОТПУСКОВ ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS vacations (
+                user_id TEXT PRIMARY KEY,
+                roles_data TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                reason TEXT
+            )
+        ''')
+        
         logger.info("База данных инициализирована")
+
+# ========== ЛИЧНЫЕ КАНАЛЫ ==========
 
 def get_private_channel(user_id: str) -> Optional[int]:
     """Получить ID личного канала пользователя"""
@@ -80,6 +93,8 @@ def set_private_channel(user_id: str, channel_id: int):
             (user_id, channel_id)
         )
         logger.info(f"Личный канал {channel_id} установлен для пользователя {user_id}")
+
+# ========== СОЗДАННЫЕ КАНАЛЫ (ОТКАТЫ) ==========
 
 def add_created_channel(channel_id: int, creator_id: int, channel_name: str):
     """Добавить созданный канал в БД"""
@@ -105,7 +120,7 @@ def channel_exists(channel_id: int) -> bool:
         cursor.execute("SELECT 1 FROM created_channels WHERE channel_id = ?", (channel_id,))
         return cursor.fetchone() is not None
 
-# ========== ФУНКЦИИ ДЛЯ ФОРМЫ ЗАЯВОК ==========
+# ========== ФОРМА ЗАЯВОК ==========
 
 def save_application_form(form_fields: List[Dict]):
     """Сохранить конфигурацию формы заявки"""
@@ -142,7 +157,7 @@ def get_default_application_form() -> List[Dict]:
             "style": "short",
             "required": True,
             "placeholder": "Введите ваш ник, статик и имя с возрастом",
-            "emoji": "💎",  # ← НОВОЕ ПОЛЕ
+            "emoji": "💎",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -154,7 +169,7 @@ def get_default_application_form() -> List[Dict]:
             "style": "paragraph",
             "required": True,
             "placeholder": "Перечислите ваши прошлые семьи",
-            "emoji": "🏛️",  # ← НОВОЕ ПОЛЕ
+            "emoji": "🏛️",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -166,7 +181,7 @@ def get_default_application_form() -> List[Dict]:
             "style": "paragraph",
             "required": True,
             "placeholder": "Опишите ваши откаты с ГТ",
-            "emoji": "🦖",  # ← НОВОЕ ПОЛЕ
+            "emoji": "🦖",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -178,7 +193,7 @@ def get_default_application_form() -> List[Dict]:
             "style": "paragraph",
             "required": True,
             "placeholder": "Расскажите, зачем хотите вступить",
-            "emoji": "🎯",  # ← НОВОЕ ПОЛЕ
+            "emoji": "🎯",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -190,13 +205,43 @@ def get_default_application_form() -> List[Dict]:
             "style": "short",
             "required": True,
             "placeholder": "Откуда вы о нас узнали?",
-            "emoji": "📢",  # ← НОВОЕ ПОЛЕ
+            "emoji": "📢",
             "min_length": None,
             "max_length": None,
             "options": []
         }
     ]
 
+# ========== НОВЫЕ ФУНКЦИИ ДЛЯ ОТПУСКОВ ==========
+
+def save_vacation_data(user_id, roles_list, start_date, end_date, reason):
+    """Сохранить данные об отпуске и ролях"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        roles_json = json.dumps(roles_list)
+        cursor.execute('''
+            INSERT OR REPLACE INTO vacations (user_id, roles_data, start_date, end_date, reason)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, roles_json, start_date, end_date, reason))
+        logger.info(f"Отпуск для {user_id} сохранен.")
+
+def get_vacation_data(user_id):
+    """Получить сохраненные роли пользователя в отпуске"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT roles_data FROM vacations WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        
+    if result:
+        return json.loads(result['roles_data'])
+    return None
+
+def delete_vacation_data(user_id):
+    """Удалить данные об отпуске (пользователь вернулся)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM vacations WHERE user_id = ?', (user_id,))
+        logger.info(f"Отпуск для {user_id} удален из БД.")
 
 # Инициализация БД при импорте модуля
 init_db()
