@@ -3,14 +3,29 @@ from disnake.ext import commands
 from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, ChannelType, SelectOption
 from disnake.ui import View, button, Button, StringSelect, Modal, TextInput
 from datetime import datetime
-from constants import *
-from database import get_private_channel, set_private_channel
+import sys
+import os
+
+# --- ИМПОРТ КОНСТАНТ ---
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from constants import MAIN_CHANNEL_ID, CAPT_CHANNEL_ID, MCL_CHANNEL_ID, CATEGORY_ID
+    from database import get_private_channel, set_private_channel
+except ImportError:
+    MAIN_CHANNEL_ID = 0
+    CAPT_CHANNEL_ID = 0
+    MCL_CHANNEL_ID = 0
+    CATEGORY_ID = 0
+
+    def get_private_channel(u): return None
+    def set_private_channel(u, c): pass
 
 
 # --- 1. ФОРМА ОТКАТА (ФИНАЛЬНЫЙ ШАГ) ---
 class RollbackForm(Modal):
-    def __init__(self, target_thread: disnake.Thread):
-        self.target_thread = target_thread
+    def __init__(self, thread_id: int, thread_name: str):
+        self.thread_id = thread_id
+        self.thread_name = thread_name
         
         components = [
             TextInput(
@@ -25,8 +40,23 @@ class RollbackForm(Modal):
 
     async def callback(self, interaction: disnake.ModalInteraction):
         await interaction.response.defer(ephemeral=True)
-        
         details = interaction.text_values["rollback_details"]
+
+        # Получаем объект ветки заново по ID, чтобы избежать ошибок с устаревшими объектами
+        target_thread = interaction.guild.get_thread(self.thread_id)
+        
+        # Если get_thread вернул None (ветка старая или не в кэше), пробуем fetch
+        if not target_thread:
+            try:
+                target_thread = await interaction.guild.fetch_channel(self.thread_id)
+            except disnake.NotFound:
+                return await interaction.followup.send("❌ Ветка была удалена и больше недоступна.", ephemeral=True)
+            except Exception as e:
+                return await interaction.followup.send(f"❌ Ошибка доступа к ветке: {e}", ephemeral=True)
+
+        # Если ветка в архиве — разархивируем
+        if target_thread.archived:
+            await target_thread.edit(archived=False)
 
         # Отправляем в выбранную ветку
         public_embed = Embed(
@@ -36,7 +66,10 @@ class RollbackForm(Modal):
         )
         public_embed.set_author(name=f"Откат от {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
         
-        await self.target_thread.send(embed=public_embed)
+        try:
+            await target_thread.send(embed=public_embed)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Не удалось отправить сообщение в ветку: {e}", ephemeral=True)
 
         # Логика ПРИВАТНОГО канала (дублирование)
         try:
@@ -47,26 +80,34 @@ class RollbackForm(Modal):
             if not private_channel:
                 category = interaction.guild.get_channel(CATEGORY_ID)
                 if category:
-                    private_channel = await interaction.guild.create_text_channel(
-                        name=interaction.user.name,
-                        category=category,
-                        reason="Личный канал"
-                    )
-                    await private_channel.set_permissions(interaction.guild.default_role, view_channel=False)
-                    await private_channel.set_permissions(interaction.user, view_channel=True)
+                    safe_name = interaction.user.name[:90]
+                    # Проверяем, нет ли уже такого канала (на случай рассинхрона базы)
+                    existing = disnake.utils.get(category.text_channels, name=safe_name)
+                    if existing:
+                        private_channel = existing
+                    else:
+                        private_channel = await interaction.guild.create_text_channel(
+                            name=safe_name,
+                            category=category,
+                            reason="Личный канал"
+                        )
+                        await private_channel.set_permissions(interaction.guild.default_role, view_channel=False)
+                        await private_channel.set_permissions(interaction.user, view_channel=True)
+                    
                     set_private_channel(user_id, private_channel.id)
 
             if private_channel:
                 private_embed = Embed(
                     title="✅ Откат отправлен",
-                    description=f"**Ветка:** {self.target_thread.mention}\n**Текст:**\n{details}",
-                    color=0x3BA55D
+                    description=f"**Ветка:** {target_thread.mention}\n**Текст:**\n{details}",
+                    color=0x3BA55D,
+                    timestamp=datetime.now()
                 )
                 await private_channel.send(embed=private_embed)
         except Exception as e:
             print(f"Ошибка с личным каналом: {e}")
 
-        await interaction.followup.send(f"✅ Откат успешно отправлен в ветку {self.target_thread.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ Откат успешно отправлен в ветку {target_thread.mention}", ephemeral=True)
 
 
 # --- 2. ВЫБОР КОНКРЕТНОЙ ВЕТКИ ---
@@ -74,12 +115,13 @@ class ThreadSelect(StringSelect):
     def __init__(self, threads):
         options = []
         # Сортируем ветки (сначала новые) и берем последние 25
-        sorted_threads = sorted(threads, key=lambda t: t.created_at, reverse=True)[:25]
+        # Фильтруем None в created_at на всякий случай
+        sorted_threads = sorted(threads, key=lambda t: t.created_at or datetime.min, reverse=True)[:25]
         
         for thread in sorted_threads:
             options.append(SelectOption(
-                label=thread.name[:100], 
-                value=str(thread.id), 
+                label=(thread.name or "Без названия")[:100],
+                value=str(thread.id),
                 emoji="#️⃣"
             ))
         
@@ -100,13 +142,12 @@ class ThreadSelect(StringSelect):
             return
             
         thread_id = int(self.values[0])
-        target_thread = interaction.guild.get_thread(thread_id)
+        # Мы можем получить имя из options, чтобы передать в форму для красоты, 
+        # но объект потока получим уже внутри формы для надежности.
+        selected_option = next((opt for opt in self.options if opt.value == self.values[0]), None)
+        thread_name = selected_option.label if selected_option else "Unknown"
         
-        if not target_thread:
-            await interaction.response.send_message("❌ Ветка не найдена (возможно, удалена/в архиве).", ephemeral=True)
-            return
-
-        await interaction.response.send_modal(RollbackForm(target_thread))
+        await interaction.response.send_modal(RollbackForm(thread_id, thread_name))
 
 
 class ThreadSelectView(View):
@@ -134,19 +175,18 @@ class CategorySelect(StringSelect):
             return
 
         # Ищем активные ветки в канале
-        # Важно: threads возвращает только активные ветки. Если ветка в архиве, её тут не будет.
         threads = channel.threads
         
         if not threads:
             await interaction.response.send_message(
-                f"⚠️ В канале {channel.mention} нет активных веток (событий).\nПопросите администратора создать ветку.", 
+                f"⚠️ В канале {channel.mention} нет активных веток (событий).\nПопросите администратора создать ветку.",
                 ephemeral=True
             )
             return
             
         await interaction.response.send_message(
-            "Выберите конкретное событие:", 
-            view=ThreadSelectView(threads), 
+            "Выберите конкретное событие:",
+            view=ThreadSelectView(threads),
             ephemeral=True
         )
 
@@ -228,8 +268,8 @@ class MainChannelButtons(View):
     @button(label="🔄 Оформить откат", style=ButtonStyle.success, custom_id="btn_user_rollback")
     async def user_rollback_btn(self, button: Button, interaction: Interaction):
         await interaction.response.send_message(
-            "Выберите тип мероприятия:", 
-            view=CategorySelectView(), 
+            "Выберите тип мероприятия:",
+            view=CategorySelectView(),
             ephemeral=True
         )
 
@@ -240,8 +280,8 @@ class MainChannelButtons(View):
             return
 
         await interaction.response.send_message(
-            "В каком канале создать ветку?", 
-            view=AdminChannelSelectView(), 
+            "В каком канале создать ветку?",
+            view=AdminChannelSelectView(),
             ephemeral=True
         )
 
@@ -252,10 +292,17 @@ class ManagementCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        # Используем Persistent Views
+        self.bot.add_view(MainChannelButtons(self.bot))
+        
         try:
             main_channel = self.bot.get_channel(MAIN_CHANNEL_ID)
             if main_channel:
-                await main_channel.purge(limit=10)
+                # Обновляем сообщение вместо полного удаления, если оно последнее и от бота
+                last_message = None
+                async for msg in main_channel.history(limit=1):
+                    last_message = msg
+                
                 embed = Embed(
                     title="🎮 Управление событиями",
                     description=(
@@ -264,10 +311,17 @@ class ManagementCog(commands.Cog):
                     ),
                     color=0x2B2D31,
                 )
-                await main_channel.send(embed=embed, view=MainChannelButtons(self.bot))
+
+                if last_message and last_message.author == self.bot.user:
+                    await last_message.edit(embed=embed, view=MainChannelButtons(self.bot))
+                else:
+                    await main_channel.purge(limit=5)
+                    await main_channel.send(embed=embed, view=MainChannelButtons(self.bot))
+                
                 print("✅ [Management] Панель обновлена")
         except Exception as e:
             print(f"❌ [Management] Ошибка: {e}")
+
 
 def setup(bot):
     bot.add_cog(ManagementCog(bot))
