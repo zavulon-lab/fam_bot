@@ -170,11 +170,11 @@ class GiveawayPreviewView(View):
         self.data["fixed_message_id"] = msg.id
         save_giveaway_data(self.data)
         
-        await interaction.response.edit_message(content=f"✅ Розыгрыш опубликован! [Ссылка]({msg.jump_url})", view=None, embed=None)
+        await interaction.response.edit_message(content=f"Розыгрыш опубликован! [Ссылка]({msg.jump_url})", view=None, embed=None)
 
     @disnake.ui.button(label="Отмена", style=ButtonStyle.danger, emoji="❌")
     async def cancel(self, button: Button, interaction: Interaction):
-        await interaction.response.edit_message(content="❌ Создание отменено.", view=None, embed=None)
+        await interaction.response.edit_message(content="Создание отменено.", view=None, embed=None)
 
 
 class GiveawayEditModal(Modal):
@@ -276,7 +276,7 @@ class WinnerSelectModal(Modal):
         data["preselected_at"] = datetime.now(timezone.utc).isoformat()
         save_giveaway_data(data)
         
-        await interaction.response.send_message("✅ Победители зафиксированы.", ephemeral=True)
+        await interaction.response.send_message("Победители зафиксированы.", ephemeral=True)
 
 
 class GiveawayJoinView(View):
@@ -300,7 +300,7 @@ class GiveawayJoinView(View):
             msg = "📤 Вы больше не участвуете."
         else:
             participants.append(uid)
-            msg = "✅ Вы участвуете в розыгрыше!"
+            msg = "Вы участвуете в розыгрыше!"
         
         data["participants"] = participants
         save_giveaway_data(data)

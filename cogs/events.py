@@ -43,6 +43,49 @@ except ImportError:
 DB_PATH = Path("events.db")
 AUX_COLOR = disnake.Color.from_rgb(54, 57, 63)
 
+# ===== КАСТОМНЫЕ ЭМОДЗИ =====
+# Формат: "<:emoji_name:emoji_id>" или "<a:emoji_name:emoji_id>" для анимированных
+# Получить ID: Discord Dev Portal → Emoji → скопировать ID
+
+# Админ-панель (MainAdminView)
+EMOJI_DICE = "🎰"              # Начать регистрацию
+EMOJI_TRASH = "🗑️"             # Завершить и очистить
+EMOJI_PLUS = "➕"              # Внести в основной список
+EMOJI_MINUS = "➖"             # Перевести в резервный список
+EMOJI_MIC = "🎙️"              # Проверка голосового канала
+EMOJI_CHAT = "💬"              # Тегнуть основной список
+EMOJI_MEGAPHONE = "📢"         # Пингануть everyone
+EMOJI_GEAR = "⚙️"              # Меню управления
+
+# Публичная панель (EventUserView)
+EMOJI_JOIN = "➕"              # Записаться
+EMOJI_LEAVE = "➖"             # Покинуть список
+
+# Меню управления (OtherOptionsView) - Select Options
+EMOJI_STAR = "⭐"              # White List
+EMOJI_INBOX = "📥"             # WL → Основа
+EMOJI_PLUS_CIRCLE = "➕"       # Внести в резерв
+EMOJI_SETTINGS = "⚙️"          # Редактировать Embed
+EMOJI_PAUSE = "🚫"             # Пауза
+EMOJI_RESUME = "🔄"            # Старт
+EMOJI_DOOR = "🚪"              # Кик
+EMOJI_CAMERA = "🎥"            # Запрос откатов
+
+# Меню управления - кнопки внутри (динамические View)
+EMOJI_PLUS_BTN = "➕"          # Добавить ID (WL)
+EMOJI_MINUS_BTN = "➖"         # Удалить ID (WL)
+EMOJI_EYE = "👁️"              # Показать WL
+EMOJI_BIN = "🗑️"              # Очистить весь WL
+EMOJI_CHECK = "✅"             # Выполнить (WL Mass Add)
+EMOJI_PENCIL = "✏️"            # Редактировать (Edit)
+EMOJI_PLAY = "▶️"              # Возобновить регистрацию (Resume)
+EMOJI_PAUSE_BTN = "⏸"         # Остановить регистрацию (Pause)
+EMOJI_DOOR_BTN = "🚪"          # Удалить участника (Kick)
+EMOJI_CAMERA_BTN = "🎥"        # Отправить запрос (VODs)
+
+# Закрыть меню
+EMOJI_CROSS = "❌"             # Закрыть
+
 # --- РАБОТА С БАЗОЙ ДАННЫХ ---
 
 def init_events_db():
@@ -223,7 +266,7 @@ async def log_event_history(bot, event_data):
     try: await channel.send(embed=embed)
     except: pass
 
-# --- ГЕНЕРАЦИЯ ЭМБЕДОВ (2 ШТУКИ) ---
+# --- ГЕНЕРАЦИЯ ЭМБЕДОВ ---
 
 def generate_admin_embeds(data=None):
     """Возвращает СПИСОК с одним эмбедом, содержащим и основу, и резерв"""
@@ -299,7 +342,6 @@ def generate_admin_embeds(data=None):
     embed.set_footer(text=f"ID Ивента: {data['id']}")
 
     return [embed]
-
 
 async def update_all_views(bot, data=None):
     """Обновляет сообщения админки и публичного канала."""
@@ -529,19 +571,18 @@ class OtherOptionsView(View):
         self.event_id = event_id
         
         options = [
-            disnake.SelectOption(label="White List", description="Управление списком приоритета", emoji="⭐", value="whitelist"),
-            disnake.SelectOption(label="WL → Основа", description="Массовый перенос всех из WL в основу", emoji="📥", value="wl_mass_add"),
-            disnake.SelectOption(label="Внести в резерв", description="Ручной ввод ID участников", emoji="➕", value="add_reserve"),
-            disnake.SelectOption(label="Редактировать Embed", description="Изменить название, время, описание, картинку", emoji="⚙️", value="edit"),
-            disnake.SelectOption(label="Пауза", description="Остановить регистрацию (временно)", emoji="🚫", value="pause"),
-            disnake.SelectOption(label="Старт", description="Возобновить регистрацию", emoji="🔄", value="resume"),
-            disnake.SelectOption(label="Кик", description="Удалить участника по номеру", emoji="🚪", value="kick"),
-            disnake.SelectOption(label="Статистика", description="Количество участников", emoji="📊", value="stats"),
-            disnake.SelectOption(label="Запрос откатов", description="Пингануть участников для VOD", emoji="🎥", value="vods"),
+            disnake.SelectOption(label="White List", description="Управление списком приоритета", emoji=EMOJI_STAR, value="whitelist"),
+            disnake.SelectOption(label="WL → Основа", description="Массовый перенос всех из WL в основу", emoji=EMOJI_INBOX, value="wl_mass_add"),
+            disnake.SelectOption(label="Внести в резерв", description="Ручной ввод ID участников", emoji=EMOJI_PLUS_CIRCLE, value="add_reserve"),
+            disnake.SelectOption(label="Редактировать Embed", description="Изменить название, время, описание, картинку", emoji=EMOJI_SETTINGS, value="edit"),
+            disnake.SelectOption(label="Пауза", description="Остановить регистрацию (временно)", emoji=EMOJI_PAUSE, value="pause"),
+            disnake.SelectOption(label="Старт", description="Возобновить регистрацию", emoji=EMOJI_RESUME, value="resume"),
+            disnake.SelectOption(label="Кик", description="Удалить участника по номеру", emoji=EMOJI_DOOR, value="kick"),
+            disnake.SelectOption(label="Запрос откатов", description="Пингануть участников для VOD", emoji=EMOJI_CAMERA, value="vods"),
         ]
         self.add_item(Select(placeholder="📋 Меню управления", options=options, custom_id="other_select"))
 
-    @disnake.ui.button(label="Закрыть", style=ButtonStyle.secondary, emoji="❌", row=1)
+    @disnake.ui.button(label="Закрыть", style=ButtonStyle.secondary, emoji=EMOJI_CROSS, row=1)
     async def close_menu(self, button, interaction):
         await interaction.message.delete()
 
@@ -561,20 +602,20 @@ class OtherOptionsView(View):
             
             view = View()
             
-            btn_add = Button(label="Добавить ID", style=ButtonStyle.success, emoji="➕")
+            btn_add = Button(label="Добавить ID", style=ButtonStyle.success, emoji=EMOJI_PLUS_BTN)
             btn_add.callback = lambda i: i.response.send_modal(SmartManageModal("whitelist_add", self.event_id, interaction.message))
             
-            btn_rem = Button(label="Удалить ID", style=ButtonStyle.danger, emoji="➖")
+            btn_rem = Button(label="Удалить ID", style=ButtonStyle.danger, emoji=EMOJI_MINUS_BTN)
             btn_rem.callback = lambda i: i.response.send_modal(SmartManageModal("whitelist_remove", self.event_id, interaction.message))
             
-            btn_show = Button(label="Показать WL", style=ButtonStyle.primary, emoji="👁️")
+            btn_show = Button(label="Показать WL", style=ButtonStyle.primary, emoji=EMOJI_EYE)
             async def show_cb(inter):
                 wl_current = get_global_whitelist()
                 txt = "\n".join([f"<@{uid}>" for uid in wl_current]) if wl_current else "*Пусто*"
                 await inter.response.send_message(f"**📋 Global White List:**\n{txt}", ephemeral=True)
             btn_show.callback = show_cb
             
-            btn_clear = Button(label="Очистить весь WL", style=ButtonStyle.danger, emoji="🗑️")
+            btn_clear = Button(label="Очистить весь WL", style=ButtonStyle.danger, emoji=EMOJI_BIN)
             async def clear_cb(inter):
                 clear_global_whitelist()
                 await log_admin_action(inter.bot, "Очистка WL", "Весь список удален", inter.user)
@@ -598,7 +639,7 @@ class OtherOptionsView(View):
             )
             
             view = View()
-            btn_do = Button(label="Выполнить", style=ButtonStyle.primary, emoji="✅")
+            btn_do = Button(label="Выполнить", style=ButtonStyle.primary, emoji=EMOJI_CHECK)
             
             async def mass_add_cb(inter):
                 wl = get_global_whitelist()
@@ -633,7 +674,7 @@ class OtherOptionsView(View):
                 "Пример: `@User 123456789 987654321`"
             )
             view = View()
-            btn = Button(label="Внести ID", style=ButtonStyle.success, emoji="➕")
+            btn = Button(label="Внести ID", style=ButtonStyle.success, emoji=EMOJI_PLUS_BTN)
             btn.callback = lambda i: i.response.send_modal(SmartManageModal("manual_reserve_add", self.event_id, interaction.message))
             view.add_item(btn)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -646,7 +687,7 @@ class OtherOptionsView(View):
                 "Откроется форма редактирования."
             )
             view = View()
-            btn = Button(label="Редактировать", style=ButtonStyle.secondary, emoji="✏️")
+            btn = Button(label="Редактировать", style=ButtonStyle.secondary, emoji=EMOJI_PENCIL)
             btn.callback = lambda i: i.response.send_modal(EditEventModal(data, interaction.message))
             view.add_item(btn)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -656,7 +697,7 @@ class OtherOptionsView(View):
             embed = Embed(title="🚫 Пауза", color=AUX_COLOR)
             embed.description = "Регистрация будет приостановлена. Участники не смогут записываться."
             view = View()
-            btn = Button(label="Остановить регистрацию", style=ButtonStyle.danger, emoji="⏸")
+            btn = Button(label="Остановить регистрацию", style=ButtonStyle.danger, emoji=EMOJI_PAUSE_BTN)
             async def do_pause(inter):
                 data["status"] = "paused"
                 save_event(data)
@@ -672,7 +713,7 @@ class OtherOptionsView(View):
             embed = Embed(title="🔄 Возобновить", color=AUX_COLOR)
             embed.description = "Регистрация снова станет доступна."
             view = View()
-            btn = Button(label="Возобновить регистрацию", style=ButtonStyle.success, emoji="▶️")
+            btn = Button(label="Возобновить регистрацию", style=ButtonStyle.success, emoji=EMOJI_PLAY)
             async def do_resume(inter):
                 data["status"] = "active"
                 save_event(data)
@@ -693,19 +734,10 @@ class OtherOptionsView(View):
                 "• `р5` или `r5` — удалить 5-го из резерва"
             )
             view = View()
-            btn = Button(label="Удалить участника", style=ButtonStyle.danger, emoji="🚪")
+            btn = Button(label="Удалить участника", style=ButtonStyle.danger, emoji=EMOJI_DOOR_BTN)
             btn.callback = lambda i: i.response.send_modal(SmartManageModal("kick_user", self.event_id, interaction.message))
             view.add_item(btn)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-        # === STATS ===
-        elif val == "stats":
-            struct = get_participants_struct(data)
-            embed = Embed(title="📊 Статистика", color=AUX_COLOR)
-            embed.add_field(name="Основа", value=str(len(struct["main"])), inline=True)
-            embed.add_field(name="Резерв", value=str(len(struct["reserve"])), inline=True)
-            embed.add_field(name="Всего", value=str(len(struct["main"]) + len(struct["reserve"])), inline=False)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # === VODS ===
         elif val == "vods":
@@ -715,7 +747,7 @@ class OtherOptionsView(View):
                 "Сообщение будет отправлено в канал ивента."
             )
             view = View()
-            btn = Button(label="Отправить запрос", style=ButtonStyle.primary, emoji="🎥")
+            btn = Button(label="Отправить запрос", style=ButtonStyle.primary, emoji=EMOJI_CAMERA_BTN)
             
             async def do_vods(inter):
                 struct = get_participants_struct(data)
@@ -742,7 +774,7 @@ class EventUserView(View):
         super().__init__(timeout=None)
         self.event_id = event_id
 
-    @disnake.ui.button(label="Записаться", style=ButtonStyle.success, emoji="➕", custom_id="usr_join")
+    @disnake.ui.button(label="Записаться", style=ButtonStyle.success, emoji=EMOJI_JOIN, custom_id="usr_join")
     async def join(self, button, interaction):
         data = get_event_by_id(self.event_id)
         if not data: return await interaction.response.send_message("❌ Ивент не найден.", ephemeral=True)
@@ -767,16 +799,14 @@ class EventUserView(View):
         msg = ""
 
         if uid in wl or has_priority:
+            # Приоритетные участники идут в начало основы
             struct["main"].insert(0, user_data)
             msg = "✅ Вы записаны в **ОСНОВУ** (Priority/WL)!"
             struct = push_to_reserve_if_full(struct, data["max_slots"])
         else:
-            if len(struct["main"]) < data["max_slots"]:
-                struct["main"].append(user_data)
-                msg = "✅ Вы записаны в **ОСНОВУ**."
-            else:
-                struct["reserve"].append(user_data)
-                msg = "⚠️ Мест нет. Вы в **РЕЗЕРВЕ**."
+            # ВСЕ ОСТАЛЬНЫЕ СРАЗУ В РЕЗЕРВ
+            struct["reserve"].append(user_data)
+            msg = "⚠️ Вы добавлены в **РЕЗЕРВ**."
         
         data["participants"] = struct
         save_event(data)
@@ -784,7 +814,7 @@ class EventUserView(View):
         await log_user_action(interaction.bot, "Вход", f"Статус: {msg}", interaction.user, False)
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @disnake.ui.button(label="Покинуть список", style=ButtonStyle.danger, emoji="➖", custom_id="usr_leave")
+    @disnake.ui.button(label="Покинуть список", style=ButtonStyle.danger, emoji=EMOJI_LEAVE, custom_id="usr_leave")
     async def leave(self, button, interaction):
         data = get_event_by_id(self.event_id)
         if not data: return
@@ -808,11 +838,11 @@ class MainAdminView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @disnake.ui.button(label="Начать регистрацию", style=ButtonStyle.secondary, emoji="🎰", row=0, custom_id="start_reg_btn")
+    @disnake.ui.button(label="Начать регистрацию", style=ButtonStyle.secondary, emoji=EMOJI_DICE, row=0, custom_id="start_reg_btn")
     async def start_reg(self, button, interaction):
         await interaction.response.send_modal(EventCreateModal())
 
-    @disnake.ui.button(label="Завершить и очистить", style=ButtonStyle.danger, emoji="🗑️", row=0, custom_id="close_evt_btn")
+    @disnake.ui.button(label="Завершить и очистить", style=ButtonStyle.danger, emoji=EMOJI_TRASH, row=0, custom_id="close_evt_btn")
     async def close_evt(self, button, interaction):
         data = get_current_event()
         if not data: return await interaction.response.send_message("❌ Нет активного мероприятия.", ephemeral=True)
@@ -830,19 +860,19 @@ class MainAdminView(View):
         await update_all_views(interaction.bot, None)
         await interaction.response.send_message("✅ Ивент завершен и удален.", ephemeral=True)
 
-    @disnake.ui.button(label="Внести в основной список", style=ButtonStyle.secondary, emoji="➕", row=1, custom_id="add_main_btn")
+    @disnake.ui.button(label="Внести в основной список", style=ButtonStyle.secondary, emoji=EMOJI_PLUS, row=1, custom_id="add_main_btn")
     async def add_to_main(self, button, interaction):
         data = get_current_event()
         if not data: return await interaction.response.send_message("❌ Сначала создайте ивент.", ephemeral=True)
         await interaction.response.send_modal(SmartManageModal("reserve_to_main", data["id"]))
 
-    @disnake.ui.button(label="Перевести в резервный список", style=ButtonStyle.secondary, emoji="➖", row=1, custom_id="to_res_btn")
+    @disnake.ui.button(label="Перевести в резервный список", style=ButtonStyle.secondary, emoji=EMOJI_MINUS, row=1, custom_id="to_res_btn")
     async def move_to_res(self, button, interaction):
         data = get_current_event()
         if not data: return await interaction.response.send_message("❌ Сначала создайте ивент.", ephemeral=True)
         await interaction.response.send_modal(SmartManageModal("main_to_reserve", data["id"]))
 
-    @disnake.ui.button(label="Проверка голосового канала", style=ButtonStyle.secondary, emoji="🎙️", row=2, custom_id="chk_voice_btn")
+    @disnake.ui.button(label="Проверка голосового канала", style=ButtonStyle.secondary, emoji=EMOJI_MIC, row=2, custom_id="chk_voice_btn")
     async def check_voice(self, button, interaction):
         data = get_current_event()
         if not data: return await interaction.response.send_message("❌ Нет активного ивента.", ephemeral=True)
@@ -873,7 +903,7 @@ class MainAdminView(View):
         else:
             await interaction.response.send_message("✅ Все участники основы в войсе!", ephemeral=True)
 
-    @disnake.ui.button(label="Тегнуть основной список", style=ButtonStyle.secondary, emoji="💬", row=2, custom_id="tag_main_btn")
+    @disnake.ui.button(label="Тегнуть основной список", style=ButtonStyle.secondary, emoji=EMOJI_CHAT, row=2, custom_id="tag_main_btn")
     async def tag_main(self, button, interaction):
         data = get_current_event()
         if not data: return
@@ -888,7 +918,7 @@ class MainAdminView(View):
         await log_admin_action(interaction.bot, "Тег участников", "Тег основы в канале", interaction.user)
         await interaction.response.send_message("✅ Тег отправлен.", ephemeral=True)
 
-    @disnake.ui.button(label="Пингануть everyone", style=ButtonStyle.secondary, emoji="📢", row=3, custom_id="ping_ev_btn")
+    @disnake.ui.button(label="Пингануть everyone", style=ButtonStyle.secondary, emoji=EMOJI_MEGAPHONE, row=3, custom_id="ping_ev_btn")
     async def ping_everyone(self, button, interaction):
         data = get_current_event()
         if not data: return
@@ -909,7 +939,7 @@ class MainAdminView(View):
         await log_admin_action(interaction.bot, "Пинг @everyone", "Анонс ивента", interaction.user)
         await interaction.response.send_message("✅ Анонс отправлен.", ephemeral=True)
 
-    @disnake.ui.button(label="Меню управления", style=ButtonStyle.primary, emoji="⚙️", row=3, custom_id="other_btn")
+    @disnake.ui.button(label="Меню управления", style=ButtonStyle.primary, emoji=EMOJI_GEAR, row=3, custom_id="other_btn")
     async def other(self, button, interaction):
         data = get_current_event()
         if not data: return await interaction.response.send_message("❌ Нет активного ивента.", ephemeral=True)
@@ -921,7 +951,6 @@ class MainAdminView(View):
             "**⚙️ Редактировать Embed** — изменить название, время, описание, картинку\n"
             "**🚫 Пауза / 🔄 Старт** — остановить/возобновить регистрацию\n"
             "**🚪 Кик** — удалить участника\n"
-            "**📊 Статистика** — показать количество участников\n"
             "**🎥 Запрос откатов** — пинг участников для VOD\n"
         )
         embed.description = desc

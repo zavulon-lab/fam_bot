@@ -20,8 +20,8 @@ bot.created_channels_cache = {}
 
 @bot.event
 async def on_ready():
-    print(f'✅ {bot.user} успешно запущен!')
-    print(f'🆔 ID: {bot.user.id}')
+    print(f'{bot.user} успешно запущен!')
+    print(f'ID: {bot.user.id}')
     print('=' * 50)
 
 def load_cogs():
@@ -32,7 +32,7 @@ def load_cogs():
     ignored_files = ['utils.py', 'constants.py', 'database.py', 'config.py', '__init__.py']
 
     if not os.path.exists(cogs_path):
-        print(f"❌ Папка {cogs_path} не найдена!")
+        print(f"Папка {cogs_path} не найдена!")
         return
 
     for item in os.listdir(cogs_path):
