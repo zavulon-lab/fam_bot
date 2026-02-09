@@ -7,7 +7,6 @@ from disnake.errors import Forbidden
 
 from .review_view import ApplicationReviewView 
 
-
 class CompleteApplicationModal(Modal):
     """Модальное окно со ВСЕМИ полями формы (максимум 5)"""
     def __init__(self, bot, form_config: list, message_to_reset: disnake.Message = None):
@@ -77,51 +76,37 @@ class CompleteApplicationModal(Modal):
             for field in self.form_config[:5]:
                 form_data[field["custom_id"]] = interaction.text_values.get(field["custom_id"], "Не указано")
 
+            # --- ФОРМИРОВАНИЕ СТРОГОГО ЭМБЕДА ---
             embed = Embed(
-                title="✦ Новая заявка на вступление в семью",
-                description=(
-                    "Спасибо, что решили присоединиться к нам ❤️\n"
-                    "Администрация рассмотрит вашу заявку в ближайшее время.\n"
-                    "──────────────────────────────"
-                ),
-                color=0x2B2D31,
+                title="Новая заявка на вступление                                             ",
+                color=disnake.Color.from_rgb(54, 57, 63), # Строгий темный цвет
                 timestamp=datetime.now(),
             )
             
-            icon_map = {
-                "ник": "🏷️", "имя": "🏷️", "возраст": "🔞",
-                "опыт": "⚔️", "стрельба": "🔫", "откаты": "🎥",
-                "цель": "🎯", "почему": "❓", "узнал": "📢",
-                "семьи": "🏰", "статик": "🆔"
-            }
-
+            # Добавляем поля без лишних эмодзи
             for field in self.form_config[:5]:
-                label_lower = field["label"].lower()
-                icon = "📝"
-                for key, val in icon_map.items():
-                    if key in label_lower:
-                        icon = val
-                        break
-                
                 embed.add_field(
-                    name=f"{icon} {field['label']}",
+                    name=field['label'],
                     value=f"```{form_data.get(field['custom_id'], 'Не указано')}```",
                     inline=False
                 )
 
+            # Информация о пользователе (строгий блок)
             created_at = interaction.user.created_at.replace(tzinfo=None)
             now = datetime.now()
             delta = now - created_at
             years = delta.days // 365
             days = delta.days % 365
-            
             account_age_str = f"{years} лет" if years > 0 else f"{days} дней"
 
-            embed.add_field(name="👤 Пользователь", value=interaction.user.mention, inline=True)
-            embed.add_field(name="🆔 ID", value=f"`{interaction.user.id}`", inline=True)
-            embed.add_field(name="📅 Аккаунт создан", value=f"{account_age_str} назад", inline=True)
+            user_info = (
+                f"**Пользователь:** {interaction.user.mention}\n"
+                f"**ID:** `{interaction.user.id}`\n"
+                f"**Возраст аккаунта:** {account_age_str}"
+            )
+            embed.add_field(name="📋 Информация об аккаунте", value=user_info, inline=False)
 
-            embed.set_footer(text=f"Семья • Заявка на вступление • {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            embed.set_footer(text="Calogero Famq • Заявка", icon_url=self.bot.user.display_avatar.url)
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
             staff_role = guild.get_role(STAFF_ROLE_ID)
@@ -129,28 +114,30 @@ class CompleteApplicationModal(Modal):
 
             await review_channel.send(content=mention, embed=embed, view=ApplicationReviewView())
 
+            # --- ОТВЕТ ПОЛЬЗОВАТЕЛЮ ---
+            
             confirm_embed = Embed(
-                title="✅ Заявка успешно отправлена!",
+                title="Заявка успешно отправлена!",
                 description=(
-                    "Ваша заявка отправлена администрации.\n"
-                    "Ожидайте дальнейших действий."
+                    "Ваша заявка отправлена.\n"
+                    "Ожидайте дальнейших действий, уведомления приходят в личные сообщения."
                 ),
-                color=0x3BA55D
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             
-            # Используем followup, так как response.defer уже был вызван
             await interaction.followup.send(embed=confirm_embed, ephemeral=True)
 
             try:
                 dm_embed = Embed(
-                    title="✅ Ваша заявка отправлена!",
+                    title="Ваша заявка отправлена!",
                     description=(
                         "Ожидайте дальнейших действий от администрации.\n"
                         "Мы свяжемся с вами в ближайшее время."
                     ),
-                    color=0x3BA55D
+                    color=disnake.Color.from_rgb(54, 57, 63)
                 )
-                dm_embed.set_footer(text=f"Семья • {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+                dm_embed.set_footer(text="Calogero Famq", icon_url=self.bot.user.display_avatar.url)
+                
                 await interaction.user.send(embed=dm_embed)
             except Forbidden:
                 pass

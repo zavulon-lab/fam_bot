@@ -35,12 +35,32 @@ def migrate_old_form_data(form_config: list) -> list:
 
 def extract_user_id_from_embed(embed: Embed) -> int | None:
     """Извлекает ID пользователя из эмбеда заявки"""
+    # 1. Сначала ищем в поле "Информация об аккаунте" или похожих
     for field in embed.fields:
-        if "ID" in field.name or "🆔" in field.name:
+        if "ID" in field.value or "Информация" in field.name:
+            # Ищем последовательность из 17-20 цифр
             match = re.search(r'`(\d{17,20})`', field.value)
             if match:
                 return int(match.group(1))
+            # Если без кавычек
+            match = re.search(r'ID:.*?(\d{17,20})', field.value)
+            if match:
+                return int(match.group(1))
+
+    # 2. Если не нашли, ищем просто по всему тексту эмбеда (резервный вариант)
+    # Собираем весь текст
+    full_text = (embed.description or "") + " "
+    for f in embed.fields:
+        full_text += f.value + " "
+    
+    # Ищем ID пользователя (обычно это user.id)
+    # Это может быть рискованно, если в тексте есть другие длинные числа, но для заявки пойдет
+    matches = re.findall(r'`?(\d{17,20})`?', full_text)
+    if matches:
+        return int(matches[0])
+        
     return None
+
 
 
 async def create_personal_file(guild, member, curator):

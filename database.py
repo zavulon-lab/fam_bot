@@ -1,3 +1,5 @@
+import os
+import json
 import sqlite3
 import logging
 import json
@@ -157,7 +159,6 @@ def get_default_application_form() -> List[Dict]:
             "style": "short",
             "required": True,
             "placeholder": "Введите ваш ник, статик и имя с возрастом",
-            "emoji": "💎",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -169,19 +170,17 @@ def get_default_application_form() -> List[Dict]:
             "style": "paragraph",
             "required": True,
             "placeholder": "Перечислите ваши прошлые семьи",
-            "emoji": "🏛️",
             "min_length": None,
             "max_length": None,
             "options": []
         },
         {
             "type": "text_input",
-            "label": "Откаты с ГТ",
+            "label": "Откаты с ГГ и мероприятий",
             "custom_id": "gt_rollbacks",
             "style": "paragraph",
             "required": True,
-            "placeholder": "Опишите ваши откаты с ГТ",
-            "emoji": "🦖",
+            "placeholder": "Отправьте ссылки на ваши откаты с ГГ или МП",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -193,7 +192,6 @@ def get_default_application_form() -> List[Dict]:
             "style": "paragraph",
             "required": True,
             "placeholder": "Расскажите, зачем хотите вступить",
-            "emoji": "🎯",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -205,7 +203,6 @@ def get_default_application_form() -> List[Dict]:
             "style": "short",
             "required": True,
             "placeholder": "Откуда вы о нас узнали?",
-            "emoji": "📢",
             "min_length": None,
             "max_length": None,
             "options": []
@@ -242,6 +239,31 @@ def delete_vacation_data(user_id):
         cursor = conn.cursor()
         cursor.execute('DELETE FROM vacations WHERE user_id = ?', (user_id,))
         logger.info(f"Отпуск для {user_id} удален из БД.")
+
+STATUS_FILE = "applications_status.json"
+
+def get_applications_status():
+    """Возвращает True, если набор открыт, False если закрыт."""
+    if not os.path.exists(STATUS_FILE):
+        # Если файла нет, создаем со статусом True (открыто по умолчанию)
+        set_applications_status(True)
+        return True
+        
+    try:
+        with open(STATUS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("enabled", True)
+    except Exception as e:
+        print(f"[Database Error] Не удалось прочитать статус заявок: {e}")
+        return True # В случае ошибки считаем открытым
+
+def set_applications_status(enabled: bool):
+    """Сохраняет статус набора (True/False)."""
+    try:
+        with open(STATUS_FILE, "w", encoding="utf-8") as f:
+            json.dump({"enabled": enabled}, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"[Database Error] Не удалось сохранить статус заявок: {e}")
 
 # Инициализация БД при импорте модуля
 init_db()

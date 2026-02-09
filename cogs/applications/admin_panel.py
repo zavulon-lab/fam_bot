@@ -3,12 +3,9 @@
 import disnake
 from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, SelectOption
 from disnake.ui import View, Button, Modal, TextInput, StringSelect
-from database import get_application_form, save_application_form
+from database import get_application_form, save_application_form, get_applications_status, set_applications_status
 from .utils import generate_custom_id, migrate_old_form_data
-
-# Глобальная переменная для статуса заявок
-APPLICATIONS_ENABLED = True
-
+from constants import APPLICATION_CHANNEL_ID
 
 class FieldTypeSelectView(View):
     """View с селектом для выбора типа поля"""
@@ -32,7 +29,6 @@ class FieldTypeSelectView(View):
         
         select.callback = select_callback
         self.add_item(select)
-
 
 class TextFieldEditorModal(Modal):
     """Редактор текстового поля"""
@@ -141,7 +137,6 @@ class TextFieldEditorModal(Modal):
             )
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
-
 class FieldDeleteSelectView(View):
     """View для удаления поля"""
     def __init__(self):
@@ -192,13 +187,12 @@ class FieldDeleteSelectView(View):
         select.callback = select_callback
         self.add_item(select)
 
-
 class ApplicationAdminSelect(StringSelect):
     """Главное меню админ-панели"""
     def __init__(self):
-        global APPLICATIONS_ENABLED
-        status_emoji = "✅" if APPLICATIONS_ENABLED else "⛔"
-        status_label = "ВЫКЛЮЧИТЬ прием заявок" if APPLICATIONS_ENABLED else "ВКЛЮЧИТЬ прием заявок"
+        self.is_enabled = get_applications_status()
+        status_emoji = "✅" if self.is_enabled else "⛔"
+        status_label = "ВЫКЛЮЧИТЬ прием заявок" if self.is_enabled else "ВКЛЮЧИТЬ прием заявок"
         
         options = [
             SelectOption(label="Настроить форму", value="configure_form", description="Добавить или изменить вопросы", emoji="⚙️"),
@@ -229,48 +223,73 @@ class ApplicationAdminSelect(StringSelect):
         if choice == "toggle_status":
             await self.toggle_applications_status(interaction)
         elif choice == "configure_form":
-            try: 
-                await interaction.message.edit(view=ApplicationAdminView())
-            except: 
-                pass
+            try: await interaction.message.edit(view=ApplicationAdminView())
+            except: pass
             await self.show_form_configuration(interaction)
         elif choice == "view_form":
-            try: 
-                await interaction.message.edit(view=ApplicationAdminView())
-            except: 
-                pass
+            try: await interaction.message.edit(view=ApplicationAdminView())
+            except: pass
             await self.view_current_form(interaction)
         elif choice == "delete_field":
-            try: 
-                await interaction.message.edit(view=ApplicationAdminView())
-            except: 
-                pass
+            try: await interaction.message.edit(view=ApplicationAdminView())
+            except: pass
             await self.delete_specific_field(interaction)
         elif choice == "reset_form":
-            try: 
-                await interaction.message.edit(view=ApplicationAdminView())
-            except: 
-                pass
+            try: await interaction.message.edit(view=ApplicationAdminView())
+            except: pass
             await self.reset_to_default(interaction)
 
     async def toggle_applications_status(self, interaction: Interaction):
-        global APPLICATIONS_ENABLED
-        APPLICATIONS_ENABLED = not APPLICATIONS_ENABLED
+        current_status = get_applications_status()
+        new_status = not current_status
+        set_applications_status(new_status)
         
-        status_text = "ОТКРЫТ" if APPLICATIONS_ENABLED else "ЗАКРЫТ"
-        color = 0x3BA55D if APPLICATIONS_ENABLED else 0xED4245
+        status_text = "ОТКРЫТ" if new_status else "ЗАКРЫТ"
+        color = 0x3BA55D if new_status else 0xED4245
         
+        # 1. Отправляем уведомление админу
         embed = Embed(
-            title="✅ Статус набора изменен" if APPLICATIONS_ENABLED else "⛔ Статус набора изменен",
+            title="✅ Статус набора изменен" if new_status else "⛔ Статус набора изменен",
             description=f"Прием заявок теперь **{status_text}**.",
             color=color
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
+        # 2. Обновляем админ-меню (чтобы сменилась кнопка вкл/выкл)
         try:
             await interaction.message.edit(view=ApplicationAdminView())
         except:
             pass
+        
+        # 3. Обновляем ПУБЛИЧНОЕ сообщение (делаем кнопку неактивной/активной)
+        # Импортируем View здесь, чтобы избежать циклических импортов
+        from .submit_button import ApplicationChannelView
+        
+        try:
+            channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
+            if channel:
+                # Ищем последнее сообщение бота в канале заявок
+                async for msg in channel.history(limit=5):
+                    if msg.author == interaction.guild.me and msg.embeds:
+                        # Обновляем View с новым статусом
+                        await msg.edit(view=ApplicationChannelView(interaction.bot))
+                        break
+                
+                # Если ОТКРЫЛИ набор - тегаем everyone
+                if new_status:
+                    try:
+                        await channel.send(
+                            content="@everyone", 
+                            embed=Embed(
+                                title="📢 Набор открыт!",
+                                description="Прием заявок в семью снова открыт. Ждем ваших анкет!",
+                                color=0x3BA55D
+                            ),
+                            delete_after=300 # Удалить через 5 минут, чтобы не спамить
+                        )
+                    except: pass
+        except Exception as e:
+            print(f"[ERROR] Не удалось обновить публичное сообщение: {e}")
 
     async def show_form_configuration(self, interaction: Interaction):
         current_form = get_application_form()
@@ -383,7 +402,6 @@ class ApplicationAdminSelect(StringSelect):
             color=0x3BA55D
         )
         await interaction.response.send_message(embed=success_embed, ephemeral=True)
-
 
 class ApplicationAdminView(View):
     """Главный View админ-панели"""
