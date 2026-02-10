@@ -1,12 +1,13 @@
 import disnake
+import asyncio
 from disnake.ext import commands
 from disnake import Embed, Interaction, ButtonStyle, TextInputStyle, SelectOption
 from disnake.ui import View, Select, TextInput, Button, button, Modal
 from datetime import datetime
 from constants import *
 
-# === ВАШИ КЛАССЫ (БЕЗ ИЗМЕНЕНИЙ) ===
-
+# === 1. АДМИНСКОЕ РЕШЕНИЕ (ФИНАЛ) ===
+# (Этот класс оставляем без изменений)
 class VerificationFinalDecisionView(View):
     def __init__(self, user: disnake.User):
         super().__init__(timeout=None)
@@ -25,6 +26,7 @@ class VerificationFinalDecisionView(View):
                     ephemeral=True
                 )
                 
+                # Уведомление пользователю
                 embed_notify = Embed(
                     title="✅ Верификация успешна",
                     description=f"Поздравляем! Вы успешно прошли проверку и получили доступ к серверу.",
@@ -36,6 +38,7 @@ class VerificationFinalDecisionView(View):
                 if notification_channel:
                     await notification_channel.send(content=self.user.mention, embed=embed_notify)
 
+                # Лог
                 log_channel = interaction.guild.get_channel(VERIFICATION_LOG_CHANNEL_ID)
                 if log_channel:
                     embed_log = Embed(title="✅ Верификация: ОДОБРЕНО", color=0x3BA55D, timestamp=datetime.now())
@@ -44,7 +47,7 @@ class VerificationFinalDecisionView(View):
                     await log_channel.send(embed=embed_log)
             else:
                 await interaction.followup.send(
-                    embed=Embed(description="❌ Ошибка: Роль VERIFIED_ROLE_ID не найдена в настройках.", color=0xFF0000),
+                    embed=Embed(description="❌ Ошибка: Роль VERIFIED_ROLE_ID не найдена.", color=0xFF0000),
                     ephemeral=True
                 )
             
@@ -57,6 +60,7 @@ class VerificationFinalDecisionView(View):
     @button(label="❌ Отказать после проверки", style=ButtonStyle.danger, custom_id="final_reject")
     async def final_reject(self, button: Button, interaction: Interaction):
         await interaction.response.defer(ephemeral=True)
+        
         notification_channel = interaction.guild.get_channel(VERIFICATION_NOTIFICATION_CHANNEL_ID)
         if notification_channel:
             embed = Embed(
@@ -77,6 +81,9 @@ class VerificationFinalDecisionView(View):
         await interaction.followup.send(embed=Embed(description=f"❌ Верификация {self.user.mention} отклонена.", color=0xFF0000), ephemeral=True)
         for child in self.children: child.disabled = True
         await interaction.edit_original_response(view=self)
+
+
+# === 2. АДМИНСКИЕ КНОПКИ (ПЕРВИЧНОЕ РЕШЕНИЕ) ===
 
 class VerificationAdminButtons(View):
     def __init__(self, user: disnake.User):
@@ -150,9 +157,11 @@ class VerificationAdminButtons(View):
         for child in self.children: child.disabled = True
         await interaction.message.edit(view=self)
 
+
+# === 3. МОДАЛКА ЗАПРОСА ===
+
 class VerificationRequestModal(Modal):
-    def __init__(self, message_to_reset: disnake.Message = None):
-        self.message_to_reset = message_to_reset
+    def __init__(self):
         components = [
             TextInput(
                 label="Причина запроса",
@@ -168,10 +177,6 @@ class VerificationRequestModal(Modal):
     async def callback(self, interaction: disnake.ModalInteraction):
         await interaction.response.defer(ephemeral=True)
         
-        if self.message_to_reset:
-            try: await self.message_to_reset.edit(view=VerificationView())
-            except: pass 
-
         reason = interaction.text_values["reason"]
         admin_channel = interaction.guild.get_channel(VERIFICATION_ADMIN_CHANNEL_ID)
         
@@ -203,6 +208,9 @@ class VerificationRequestModal(Modal):
             ephemeral=True
         )
 
+
+# === 4. СБРАСЫВАЕМЫЙ СЕЛЕКТ И VIEW ===
+
 class VerificationSelect(Select):
     def __init__(self):
         options = [
@@ -212,31 +220,66 @@ class VerificationSelect(Select):
 
     async def callback(self, interaction: Interaction):
         if self.values[0] == "request_verify":
-            await interaction.response.send_modal(VerificationRequestModal(interaction.message))
+            # 1. Открываем модалку
+            await interaction.response.send_modal(VerificationRequestModal())
+            
+            # 2. Сброс селекта
+            # Используем create_task с передачей interaction
+            asyncio.create_task(self.reset_menu(interaction))
+
+    async def reset_menu(self, interaction: Interaction):
+        """Сбрасывает селект через 1 секунду"""
+        try:
+            await asyncio.sleep(1)
+            # Используем interaction.message.edit - это безопасно, если сообщение не удалено
+            await interaction.message.edit(view=VerificationView())
+        except disnake.NotFound:
+            print("[Verif] Сообщение не найдено (удалено?). Не могу сбросить меню.")
+        except Exception as e:
+            print(f"[Verif] Ошибка сброса меню: {e}")
+
 
 class VerificationView(View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(VerificationSelect())
 
-# === ДОБАВЛЕНО: КЛАСС COG ДЛЯ ЗАГРУЗКИ ===
+
+# === 5. COG ===
+
 class VerificationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Автоматическая отправка меню в канал запросов
         channel = self.bot.get_channel(VERIFICATION_REQUEST_CHANNEL_ID)
         if channel:
-            await channel.purge(limit=10)
             embed = Embed(
                 title="Верификация",
                 description="Для получения доступа к каналам сервера необходимо пройти верификацию.",
                 color=0x2B2D31
             )
-            await channel.send(embed=embed, view=VerificationView())
-            print("[Verification] Меню верификации обновлено.")
+            
+            # --- ЛОГИКА "НЕ УДАЛЯТЬ, А ОБНОВЛЯТЬ" ---
+            # Ищем последнее сообщение бота, чтобы обновить его (сохранив ID)
+            # Это предотвращает ошибку "404 Unknown Message" у пользователей
+            last_msg = None
+            async for msg in channel.history(limit=10):
+                if msg.author == self.bot.user:
+                    last_msg = msg
+                    break # Нашли
+
+            if last_msg:
+                # Если сообщение есть - просто обновляем View
+                await last_msg.edit(embed=embed, view=VerificationView())
+                print("[Verification] Меню ОБНОВЛЕНО (edit).")
+            else:
+                # Если сообщения нет - очищаем и шлем новое
+                await channel.purge(limit=10)
+                await channel.send(embed=embed, view=VerificationView())
+                print("[Verification] Меню СОЗДАНО (purge & send).")
+
 
 def setup(bot):
     bot.add_cog(VerificationCog(bot))

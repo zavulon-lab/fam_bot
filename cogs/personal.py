@@ -2,11 +2,29 @@ import disnake
 from disnake.ext import commands
 from disnake import Embed, Interaction, ButtonStyle
 from disnake.ui import View, Button, button
-from constants import PERSONAL_CHANNEL_REQUEST_ID
+import sys
+import os
 
+# Импорт констант
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from constants import PERSONAL_CHANNEL_REQUEST_ID
+except ImportError:
+    PERSONAL_CHANNEL_REQUEST_ID = 0
+
+# Импорт ваших вьюшек
 from .vacation import VacationActionsView
 from .portfolio import PortfolioView
 from .verification import VerificationView
+
+# --- ВАЖНО: Импорт логики откатов из соседнего кога ---
+# Убедитесь, что путь правильный (cogs.management.cog)
+try:
+    from cogs.management import RollbackGuideView
+except ImportError:
+    print("⚠️ [Personal] Не удалось импортировать RollbackGuideView. Кнопка откатов не будет работать.")
+    class RollbackGuideView(View): pass 
+
 
 class MainMenuButtons(View):
     def __init__(self):
@@ -23,7 +41,6 @@ class MainMenuButtons(View):
             ),
             color=0x2B2D31
         )
-        # Картинка thumbnail
         embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/3143/3143636.png")
         await interaction.response.send_message(embed=embed, view=VacationActionsView(), ephemeral=True)
 
@@ -60,6 +77,26 @@ class MainMenuButtons(View):
         
         await interaction.response.send_message(embed=embed, view=VerificationView(), ephemeral=True)
 
+    # --- КНОПКА ОТКАТОВ (С ГАЙДОМ) ---
+    @button(label="Оформить откат", style=ButtonStyle.danger, emoji="🔄", custom_id="btn_main_rollback")
+    async def rollback_btn(self, button: Button, interaction: Interaction):
+        embed = Embed(
+            title="📹 Как оформить откат",
+            description=(
+                "**Инструкция:**\n"
+                "1. Залейте видео на хостинг.\n"
+                "2. Скопируйте ссылку.\n"
+                "3. Подготовьте таймкоды (если нужно).\n\n"
+                "👇 **Выберите тип мероприятия в меню ниже:**"
+            ),
+            color=0xE74C3C
+        )
+        embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/2965/2965279.png")
+        
+        # Теперь RollbackGuideView содержит сразу Select, а не кнопку
+        await interaction.response.send_message(embed=embed, view=RollbackGuideView(), ephemeral=True)
+
+
 class PersonalCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -69,22 +106,28 @@ class PersonalCog(commands.Cog):
         try:
             channel = self.bot.get_channel(PERSONAL_CHANNEL_REQUEST_ID)
             if channel:
+                # Обновляем persistent view
+                self.bot.add_view(MainMenuButtons())
+                
                 await channel.purge(limit=10)
+                
                 embed = Embed(
                     title="⚙️ Взаимодействие с функционалом бота",
                     description=(
                         "📅 **Отпуск** — Взять долгосрочный отпуск, отдых от игры\n"
                         "📹 **Тир** — Создание портфеля, получить Tier роль\n"
-                        "✅ **Верификация** — Пройти проверку для доступа к каптам"
+                        "✅ **Верификация** — Пройти проверку для доступа к каптам\n"
+                        "🔄 **Откат** — Загрузить запись с мероприятия"
                     ),
                     color=0x2B2D31
                 )
-                # Ваша картинка
                 embed.set_image(url="https://media.discordapp.net/attachments/1336423985794682974/1336423986381754409/6FDCFF59-EFBB-4D26-9E57-50B0F3D61B50.jpg") 
+                
                 await channel.send(embed=embed, view=MainMenuButtons())
                 print("✅ [Personal] Главное меню обновлено")
         except Exception as e:
             print(f"❌ [Personal] Ошибка: {e}")
+
 
 def setup(bot):
     bot.add_cog(PersonalCog(bot))
