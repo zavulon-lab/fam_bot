@@ -7,12 +7,11 @@ from datetime import datetime
 import sys
 import os
 
-# --- НАСТРОЙКА ИМПОРТОВ ---
 current_dir = os.path.dirname(os.path.abspath(__file__)) 
 root_dir = os.path.dirname(current_dir)
 sys.path.append(root_dir)
 
-# --- КОНСТАНТЫ ---
+
 try:
     from constants import MCL_CHANNEL_ID, CAPT_CHANNEL_ID, CATEGORY_ID, ADMIN_MANAGEMENT_CHANNEL_ID
     from database import get_private_channel, set_private_channel
@@ -24,10 +23,6 @@ except ImportError:
     def get_private_channel(u): return None
     def set_private_channel(u, c): pass
 
-
-# ==========================================
-# 1. ЛОГИКА ОТПРАВКИ ОТКАТА (ДЛЯ ПОЛЬЗОВАТЕЛЯ)
-# ==========================================
 
 class RollbackForm(Modal):
     def __init__(self, thread_id: int, thread_name: str):
@@ -54,17 +49,16 @@ class RollbackForm(Modal):
             try:
                 target_thread = await interaction.guild.fetch_channel(self.thread_id)
             except disnake.NotFound:
-                return await interaction.followup.send("❌ Ветка была удалена и больше недоступна.", ephemeral=True)
+                return await interaction.followup.send("Ветка была удалена и больше недоступна.", ephemeral=True)
             except Exception as e:
-                return await interaction.followup.send(f"❌ Ошибка доступа к ветке: {e}", ephemeral=True)
+                return await interaction.followup.send(f"Ошибка доступа к ветке: {e}", ephemeral=True)
 
         if target_thread.archived:
             await target_thread.edit(archived=False)
 
-        # 1. Публичный эмбед
         public_embed = Embed(
             description=f"**Отправитель:** {interaction.user.mention}\n\n{details}",
-            color=0x3A3B3C,
+            color=disnake.Color.from_rgb(54, 57, 63),
             timestamp=datetime.now()
         )
         public_embed.set_author(name=f"Откат от {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
@@ -72,9 +66,8 @@ class RollbackForm(Modal):
         try:
             await target_thread.send(embed=public_embed)
         except Exception as e:
-            return await interaction.followup.send(f"❌ Не удалось отправить сообщение в ветку: {e}", ephemeral=True)
+            return await interaction.followup.send(f"Не удалось отправить сообщение в ветку: {e}", ephemeral=True)
 
-        # 2. Личный канал
         try:
             user_id = str(interaction.user.id)
             channel_id = get_private_channel(user_id)
@@ -105,7 +98,7 @@ class RollbackForm(Modal):
 
             if private_channel:
                 private_embed = Embed(
-                    title="✅ Откат отправлен",
+                    title="Откат отправлен",
                     description=f"**Ветка:** {target_thread.mention}\n**Текст:**\n{details}",
                     color=0x3BA55D,
                     timestamp=datetime.now()
@@ -114,7 +107,7 @@ class RollbackForm(Modal):
         except Exception as e:
             print(f"Ошибка с личным каналом: {e}")
 
-        await interaction.followup.send(f"✅ Откат успешно отправлен в ветку {target_thread.mention}", ephemeral=True)
+        await interaction.followup.send(f"Откат успешно отправлен в ветку {target_thread.mention}", ephemeral=True)
 
 
 class ThreadSelect(StringSelect):
@@ -123,7 +116,6 @@ class ThreadSelect(StringSelect):
         
         options = []
         for thread in threads_chunk:
-            # Обрезаем имя, чтобы влезло
             label = (thread.name or "Без названия")[:95]
             options.append(SelectOption(
                 label=label,
@@ -145,9 +137,6 @@ class ThreadSelect(StringSelect):
         selected_option = next((opt for opt in self.options if opt.value == self.values[0]), None)
         thread_name = selected_option.label if selected_option else "Unknown"
         
-        # Открываем модалку. 
-        # Примечание: В Discord нельзя одновременно открыть модалку И обновить сообщение (сбросить селект).
-        # Селект останется выбранным визуально до закрытия сообщения или переключения страницы.
         await interaction.response.send_modal(RollbackForm(thread_id, thread_name))
 
 
@@ -159,30 +148,22 @@ class ThreadSelectView(View):
         self.items_per_page = 25
         self.total_pages = (len(self.threads) - 1) // self.items_per_page + 1
 
-        # Обновляем компоненты (Селект + Кнопки)
         self.update_components()
 
     def update_components(self):
-        # Очищаем старые айтемы
         self.clear_items()
 
-        # 1. Вычисляем срез веток для текущей страницы
         start = self.page * self.items_per_page
         end = start + self.items_per_page
         chunk = self.threads[start:end]
 
-        # 2. Добавляем Селект с этими ветками
         if chunk:
             self.add_item(ThreadSelect(self, chunk))
         else:
-            # На случай если список пуст (баг или удалили ветки)
-            # Добавим заглушку чтобы не крашилось
              sel = StringSelect(custom_id="empty", placeholder="Нет доступных веток", options=[SelectOption(label="Пусто", value="none")], disabled=True)
              self.add_item(sel)
 
-        # 3. Добавляем кнопки навигации, если страниц > 1
         if self.total_pages > 1:
-            # Кнопка НАЗАД
             prev_btn = Button(
                 label="◀️ Назад",
                 style=ButtonStyle.secondary,
@@ -192,7 +173,6 @@ class ThreadSelectView(View):
             prev_btn.callback = self.prev_callback
             self.add_item(prev_btn)
 
-            # Индикатор страницы (как кнопка-заглушка)
             info_btn = Button(
                 label=f"Стр. {self.page + 1}/{self.total_pages}",
                 style=ButtonStyle.secondary,
@@ -201,7 +181,6 @@ class ThreadSelectView(View):
             )
             self.add_item(info_btn)
 
-            # Кнопка ВПЕРЕД
             next_btn = Button(
                 label="Вперед ▶️",
                 style=ButtonStyle.secondary,
@@ -211,8 +190,7 @@ class ThreadSelectView(View):
             next_btn.callback = self.next_callback
             self.add_item(next_btn)
             
-        # Кнопка "ОТМЕНА" (Возврат к выбору категории)
-        cancel_btn = Button(label="🔙 Вернуться к выбору типа", style=ButtonStyle.danger, row=2)
+        cancel_btn = Button(label="🔙 Вернуться к выбору типа", style=ButtonStyle.gray, row=2)
         cancel_btn.callback = self.cancel_callback
         self.add_item(cancel_btn)
 
@@ -229,25 +207,22 @@ class ThreadSelectView(View):
             await interaction.response.edit_message(view=self)
             
     async def cancel_callback(self, interaction: Interaction):
-        # Возвращаем меню выбора категории (сброс всего процесса)
         await interaction.response.edit_message(
             content=None,
             embed=Embed(
                 title="📹 Как оформить откат",
                 description="Выберите тип мероприятия в меню ниже:",
-                color=0xE74C3C
+                color=disnake.Color.from_rgb(54, 57, 63)
             ),
-            view=RollbackGuideView() # Возвращаемся к гайду
+            view=RollbackGuideView() 
         )
 
-
-# --- ОБНОВЛЕННЫЙ CATEGORY SELECT ---
 
 class CategorySelect(StringSelect):
     def __init__(self):
         options = [
-            SelectOption(label="MCL", value="mcl", description="Мероприятия MCL", emoji="🛡️"),
-            SelectOption(label="Капт", value="capt", description="Капты", emoji="⚔️"),
+            SelectOption(label="MCL", value="mcl", description="MCL", emoji="🛡️"),
+            SelectOption(label="Капт", value="capt", description="Капт", emoji="⚔️"),
         ]
         super().__init__(placeholder="Выберите тип мероприятия...", options=options, custom_id="guide_category_select")
 
@@ -255,33 +230,27 @@ class CategorySelect(StringSelect):
         choice = self.values[0]
         channel_id = int(MCL_CHANNEL_ID) if choice == "mcl" else int(CAPT_CHANNEL_ID)
         
-        # 1. Загружаем канал
         channel = interaction.guild.get_channel(channel_id)
         if not channel:
             try: channel = await interaction.guild.fetch_channel(channel_id)
             except: pass
             
         if not channel:
-            # СБРОС (Reset): Возвращаем исходный View
-            await interaction.response.edit_message(content="❌ Канал не найден, попробуйте позже.", view=RollbackGuideView())
+            await interaction.response.edit_message(content="Канал не найден, попробуйте позже.", view=RollbackGuideView())
             return
 
-        # 2. Получаем ветки
         threads = channel.threads
         if not threads:
              try: threads = await channel.active_threads()
              except: pass
 
         if not threads:
-            # СБРОС (Reset)
             await interaction.response.edit_message(
-                content=f"⚠️ В канале {channel.mention} нет активных событий.",
+                content=f"В канале {channel.mention} нет активных событий.",
                 view=RollbackGuideView() 
             )
             return
             
-        # УСПЕХ: Заменяем сообщение на пагинатор веток
-        # Создаем View с пагинацией (страница 0)
         paginated_view = ThreadSelectView(threads, page=0)
         
         await interaction.response.edit_message(
@@ -291,15 +260,10 @@ class CategorySelect(StringSelect):
         )
 
 class RollbackGuideView(View):
-    """Меню с Гайдом и Селектом"""
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(CategorySelect())
 
-
-# ==========================================
-# 2. АДМИНСКАЯ ПАНЕЛЬ
-# ==========================================
 
 class AdminCreateThreadModal(Modal):
     def __init__(self, target_channel: disnake.TextChannel):
@@ -330,9 +294,9 @@ class AdminCreateThreadModal(Modal):
                     color=0x5865F2
                 )
             )
-            await interaction.response.send_message(f"✅ Ветка события создана: {thread.mention}", ephemeral=True)
+            await interaction.response.send_message(f"Ветка события создана: {thread.mention}", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.response.send_message(f"Ошибка: {e}", ephemeral=True)
 
 
 class AdminChannelSelect(StringSelect):
@@ -342,7 +306,7 @@ class AdminChannelSelect(StringSelect):
             SelectOption(label="Капт", value="capt", emoji="⚔️"),
         ]
         super().__init__(
-            placeholder="➕ Создать событие (выберите канал)...", 
+            placeholder="Создать событие (выберите канал)...", 
             options=options, 
             custom_id="admin_channel_select"
         )
@@ -356,12 +320,8 @@ class AdminChannelSelect(StringSelect):
             except: pass
             
         if channel:
-            # 1. Открываем модалку
             await interaction.response.send_modal(AdminCreateThreadModal(channel))
             
-            # 2. СБРОС СЕЛЕКТА (В фоне)
-            # Мы обновляем сообщение, в котором находится этот селект, 
-            # возвращая его в исходное состояние (AdminButtons)
             asyncio.create_task(self.reset_menu(interaction.message))
         else:
             await interaction.response.send_message(f"❌ Канал {channel_id} не найден.", ephemeral=True)
@@ -369,11 +329,9 @@ class AdminChannelSelect(StringSelect):
             asyncio.create_task(self.reset_menu(interaction.message))
 
     async def reset_menu(self, message):
-        """Сбрасывает меню через небольшую паузу"""
         if not message: return
         try:
-            await asyncio.sleep(1) # Ждем, чтобы модалка успела открыться
-            # Обновляем сообщение тем же самым View (AdminButtons), что сбросит выбор
+            await asyncio.sleep(1) 
             await message.edit(view=AdminButtons())
         except Exception as e:
             print(f"Ошибка сброса админ-меню: {e}")
@@ -411,7 +369,7 @@ class ManagementCog(commands.Cog):
 
             if admin_channel:
                 embed = Embed(
-                    title="🛠️ Админ-панель событий",
+                    title="Админ-панель событий",
                     description="Управление ветками для откатов и настройки.",
                     color=0x2B2D31,
                 )
@@ -428,9 +386,9 @@ class ManagementCog(commands.Cog):
                     await admin_channel.purge(limit=5)
                     await admin_channel.send(embed=embed, view=AdminButtons())
                 
-                print("✅ [Management] Админ-панель обновлена")
+                print("[Management] Админ-панель обновлена")
         except Exception as e:
-            print(f"❌ [Management] Ошибка: {e}")
+            print(f"[Management] Ошибка: {e}")
 
 
 def setup(bot):

@@ -1,4 +1,3 @@
-"""View с кнопками управления заявками"""
 
 import disnake
 from disnake import Embed, Interaction, ButtonStyle, SelectOption, TextInputStyle
@@ -8,7 +7,6 @@ from datetime import datetime
 from constants import *
 from .utils import extract_user_id_from_embed, create_personal_file
 
-# === МОДАЛКА ПРИЧИНЫ ОТКАЗА ===
 class DenyReasonModal(Modal):
     def __init__(self, review_view, member, original_interaction):
         self.review_view = review_view
@@ -20,7 +18,7 @@ class DenyReasonModal(Modal):
                 label="Причина отказа",
                 custom_id="deny_reason",
                 style=TextInputStyle.paragraph,
-                placeholder="Стрельба, мувмент, нарушение правил...",
+                placeholder="Стрельба, мувмент...",
                 required=True,
                 max_length=200
             )
@@ -109,7 +107,6 @@ class ApplicationReviewView(View):
             return None
 
     async def send_dm_embed(self, member: disnake.Member, embed: Embed, content: str = None) -> bool:
-        """Отправляет сообщение в ЛС (тег + эмбед)"""
         try:
             await member.send(content=content, embed=embed)
             return True
@@ -129,7 +126,6 @@ class ApplicationReviewView(View):
             pass
 
     async def send_result_log(self, guild, content: str, embed: Embed):
-        """Отправляет итог заявки в публичный канал итогов"""
         try:
             channel = guild.get_channel(APPLICATION_RESULTS_CHANNEL_ID)
             if channel:
@@ -139,25 +135,20 @@ class ApplicationReviewView(View):
         except Exception as e:
             print(f"[Error] Не удалось отправить итог заявки: {e}")
 
-    # === ЛОГИКА ОТКЛОНЕНИЯ (КРАСНЫЙ ИТОГ) ===
     async def process_denial(self, interaction: Interaction, member: disnake.Member, reason: str):
-        """Отказ: Красный эмбед в итоги + ЛС"""
         await interaction.response.defer(ephemeral=True)
         recruiter = interaction.user
 
         await self.find_and_delete_clarification_channel(interaction.guild, member.id)
 
-        # Обновляем админ-панель
         original_embed = interaction.message.embeds[0]
         if original_embed:
-            original_embed.color = 0xED4245
-            original_embed.title = "❌ Заявка отклонена"
-            original_embed.clear_fields()
-            original_embed.add_field(name="Причина", value=reason)
-            original_embed.set_footer(text=f"Отклонил: {recruiter.display_name}")
+            original_embed.color = 0xED4245 
+            
+            original_embed.set_footer(text=f"Отклонил: {recruiter.display_name} • Причина: {reason}") 
+            
             await interaction.message.edit(embed=original_embed, view=None)
 
-        # 1. ПУБЛИЧНЫЙ ЛОГ (КРАСНЫЙ)
         result_embed = Embed(
             description=(
                 f"Заявка от пользователя {member.mention}\n\n"
@@ -167,9 +158,7 @@ class ApplicationReviewView(View):
             ),
             color=0xED4245
         )
-        result_embed.set_author(name=f"@{member.name}", icon_url=member.display_avatar.url)
         result_embed.set_thumbnail(url=member.display_avatar.url)
-        # Используем interaction.client вместо self.bot
         result_embed.set_footer(text="Calogero Famq", icon_url=interaction.client.user.display_avatar.url)
         
         await self.send_result_log(interaction.guild, content=member.mention, embed=result_embed)
@@ -179,6 +168,8 @@ class ApplicationReviewView(View):
 
         await interaction.followup.send(f"❌ Заявка {member.mention} отклонена.", ephemeral=True)
 
+
+    # === ЛОГИКА ПРИНЯТИЯ (ВНУТРЕННЯЯ) ===
     # === ЛОГИКА ПРИНЯТИЯ (ВНУТРЕННЯЯ) ===
     async def process_acceptance(self, interaction: Interaction, member: disnake.Member, curator: disnake.Member, message: disnake.Message):
         """
@@ -201,17 +192,17 @@ class ApplicationReviewView(View):
         if personal_channel and recruiter != curator:
             await personal_channel.set_permissions(recruiter, view_channel=True, send_messages=True)
 
-        # 4. Обновляем админ-панель
         original_embed = message.embeds[0]
         if original_embed:
             original_embed.color = 0x3BA55D
-            original_embed.title = "✅ Принят в семью"
-            original_embed.clear_fields()
+            
+            # Добавляем разделитель или просто поля вниз, сохраняя анкету
+            original_embed.add_field(name="▬▬▬▬▬▬▬▬▬▬", value="**✅ ПРИНЯТ**", inline=False)
             original_embed.add_field(name="👨‍🏫 Куратор", value=curator.mention, inline=True)
             original_embed.add_field(name="🎖️ Рекрутер", value=recruiter.mention, inline=True)
+            
             await message.edit(embed=original_embed, view=None)
 
-        # 5. --- АКАДЕМИЯ ЛОГ ---
         try:
             academy_channel = interaction.guild.get_channel(ACADEMY_CHANNEL_ID) 
             if academy_channel:
@@ -242,7 +233,6 @@ class ApplicationReviewView(View):
 
         await interaction.followup.send(f"✅ {member.mention} принят. Лог отправлен в академию.", ephemeral=True)
 
-    # === КНОПКИ ===
 
     @button(label="✅ Принять (После обзвона)", style=ButtonStyle.success, custom_id="app_accept")
     async def accept_button(self, button: Button, interaction: Interaction):
@@ -270,10 +260,6 @@ class ApplicationReviewView(View):
 
     @button(label="📞 Вызвать на обзвон", style=ButtonStyle.primary, custom_id="app_call")
     async def call_button(self, button: Button, interaction: Interaction):
-        """
-        ЭТАП 1: Одобрение заявки и вызов на обзвон.
-        Здесь отправляется ЗЕЛЕНЫЙ ЭМБЕД в итоги.
-        """
         await interaction.response.defer(ephemeral=True)
         member = await self.get_candidate(interaction)
         recruiter = interaction.user
@@ -288,34 +274,32 @@ class ApplicationReviewView(View):
                 f"Заявка от пользователя {member.mention}\n\n"
                 f"На Вступление в семью была рассмотрена! ✅\n\n"
                 f"Для прохода обзвона ожидаем вас в канале :\n"
-                f"🔊 ┣ 🎧 {voice_mention}\n\n"
+                f"{voice_mention}\n\n"
                 f"Рассматривал заявку: {recruiter.mention}"
             ),
             color=0x3BA55D
         )
-        result_embed.set_author(name=f"@{member.name}", icon_url=member.display_avatar.url)
         result_embed.set_thumbnail(url=member.display_avatar.url)
         result_embed.set_footer(text="Calogero Famq", icon_url=interaction.client.user.display_avatar.url)
         
         await self.send_result_log(interaction.guild, content=member.mention, embed=result_embed)
         
-        # 2. ЛС (То же самое + тег)
         await self.send_dm_embed(member, result_embed, content=member.mention)
 
-        # 3. Обновление статуса в админке
+
         original_embed = interaction.message.embeds[0]
         original_embed.color = 0x5865F2
         original_embed.title = "📞 Вызван на обзвон"
         original_embed.set_footer(text=f"Вызвал: {recruiter.display_name}")
         await interaction.message.edit(embed=original_embed)
 
-        await interaction.followup.send(f"📞 {member.mention} вызван на обзвон. Итог отправлен.", ephemeral=True)
+        await interaction.followup.send(f"{member.mention} вызван на обзвон.", ephemeral=True)
 
     @button(label="❌ Отклонить", style=ButtonStyle.danger, custom_id="app_deny")
     async def deny_button(self, button: Button, interaction: Interaction):
         member = await self.get_candidate(interaction)
         if not member:
-            await interaction.response.send_message("❌ Кандидат не найден.", ephemeral=True)
+            await interaction.response.send_message("Кандидат не найден.", ephemeral=True)
             return
         await interaction.response.send_modal(DenyReasonModal(self, member, interaction))
 
@@ -323,45 +307,96 @@ class ApplicationReviewView(View):
     async def create_chat_button(self, button: Button, interaction: Interaction):
         await interaction.response.defer(ephemeral=True)
         member = await self.get_candidate(interaction)
-        if not member: return
+        
+        # Если кандидат не найден
+        if not member: 
+            await interaction.followup.send(
+                "❌ Кандидат не найден (возможно, вышел с сервера).", 
+                ephemeral=True, 
+                delete_after=20
+            )
+            return
 
         try:
             guild = interaction.guild
-            # Используем константу для категории заявок
             cat = guild.get_channel(APPLICATIONS_CATEGORY_ID) 
+            
+            # Если категория не найдена
             if not cat:
-                await interaction.followup.send("❌ Категория для заявок не найдена.", ephemeral=True)
+                await interaction.followup.send(
+                    "❌ Категория для заявок не найдена в настройках.", 
+                    ephemeral=True, 
+                    delete_after=20
+                )
                 return
 
+            # Создаем канал
             chan = await guild.create_text_channel(
                 name=f"заявка-{member.display_name}", 
                 category=cat,
-                topic=f"ID: {member.id}"
+                topic=f"ID: {member.id} | Обсуждение заявки"
             )
-            # Права
+            
+            # Настраиваем права
             await chan.set_permissions(guild.default_role, view_channel=False)
             await chan.set_permissions(member, view_channel=True, send_messages=True)
             await chan.set_permissions(interaction.user, view_channel=True, send_messages=True)
             
-            # Копируем эмбед для удобства
+            # Формируем Embed для канала
             original_embed = interaction.message.embeds[0]
             app_url = f"https://discord.com/channels/{guild.id}/{interaction.channel.id}/{interaction.message.id}"
             
             chat_embed = Embed(
-                title="📋 Данные заявки",
-                description=f"**[Перейти к управлению заявкой]({app_url})**\n\n",
+                title="📋 Обсуждение заявки",
+                description=f"Администратор {interaction.user.mention} создал этот чат для уточнения деталей.\n\n**[Перейти к сообщению с заявкой]({app_url})**",
                 color=0x2B2D31
             )
-            # Копируем поля
-            if original_embed.fields:
+            
+            # Копируем поля из заявки
+            if original_embed and original_embed.fields:
                 for f in original_embed.fields:
                     chat_embed.add_field(name=f.name, value=f.value, inline=f.inline)
             
             chat_embed.set_thumbnail(url=member.display_avatar.url)
             chat_embed.set_footer(text=f"ID: {member.id}")
 
-            await chan.send(content=f"{member.mention}, администратор {interaction.user.mention} хочет уточнить детали.", embed=chat_embed)
+            # Отправляем сообщение в новый канал
+            await chan.send(content=f"{member.mention}, администратор {interaction.user.mention} хочет уточнить детали вашей заявки.", embed=chat_embed)
             
-            await interaction.followup.send(f"✅ Чат создан: {chan.mention}", ephemeral=True)
+            # === ОТПРАВКА УВЕДОМЛЕНИЯ В ЛС ===
+            dm_embed = Embed(
+                title="💬 Уточнение по заявке",
+                description=(
+                    f"Администратор **{interaction.user.display_name}** хочет задать вам вопросы по поводу вашей заявки.\n\n"
+                    f"Пожалуйста, перейдите в созданный канал: {chan.mention}\n"
+                    f"([Прямая ссылка на канал]({chan.jump_url}))"
+                ),
+                color=0x5865F2
+            )
+            try:
+                await member.send(embed=dm_embed)
+                dm_status = "✅ Уведомление отправлено в ЛС."
+            except Forbidden:
+                dm_status = "⚠️ ЛС закрыты, уведомление не отправлено."
+            except Exception:
+                dm_status = "❌ Ошибка отправки ЛС."
+
+            # Итоговое сообщение (удаляется через 20 секунд)
+            await interaction.followup.send(
+                f"✅ Чат создан: {chan.mention}\n{dm_status}", 
+                ephemeral=True, 
+                delete_after=20
+            )
+
         except Exception as e:
-            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.followup.send(
+                f"❌ Ошибка при создании чата: {e}", 
+                ephemeral=True, 
+                delete_after=20
+            )
+
+
+            await interaction.followup.send(f"Чат создан: {chan.mention}\n{dm_status}", ephemeral=True)
+
+        except Exception as e:
+            await interaction.followup.send(f"Ошибка при создании чата: {e}", ephemeral=True)

@@ -45,9 +45,9 @@ def load_cogs():
             cog_name = item[:-3]
             try:
                 bot.load_extension(f'cogs.{cog_name}')
-                print(f'✅ Загружен ког (файл): {cog_name}')
+                print(f'Загружен ког (файл): {cog_name}')
             except Exception as e:
-                print(f'❌ Ошибка загрузки {cog_name}: {e}')
+                print(f'Ошибка загрузки {cog_name}: {e}')
                 # Выводим полный текст ошибки для отладки
                 import traceback
                 traceback.print_exc()
@@ -56,9 +56,9 @@ def load_cogs():
             if os.path.exists(os.path.join(item_path, '__init__.py')):
                 try:
                     bot.load_extension(f'cogs.{item}')
-                    print(f'✅ Загружен ког (пакет): {item}')
+                    print(f'Загружен ког (пакет): {item}')
                 except Exception as e:
-                    print(f'❌ Ошибка загрузки пакета {item}: {e}')
+                    print(f'Ошибка загрузки пакета {item}: {e}')
                     import traceback
                     traceback.print_exc()
 

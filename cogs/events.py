@@ -268,13 +268,20 @@ async def log_event_history(bot, event_data):
 
 # --- ГЕНЕРАЦИЯ ЭМБЕДОВ ---
 
-def generate_admin_embeds(data=None):
+def generate_admin_embeds(data=None, bot=None): # <-- Добавлен bot
     """Возвращает СПИСОК с одним эмбедом, содержащим и основу, и резерв"""
     
     embed = Embed(color=0x2B2D31)
     
+    # Пытаемся получить иконку бота, если передан bot
+    icon_url = None
+    if bot:
+        icon_url = bot.user.display_avatar.url
+    
     if not data:
         embed.description = "**Регистрация:** не активна"
+        if icon_url: embed.set_footer(text="Calogero Famq", icon_url=icon_url) # <-- Используем тут
+        else: embed.set_footer(text="Calogero Famq")
         return [embed]
 
     struct = get_participants_struct(data)
@@ -339,9 +346,14 @@ def generate_admin_embeds(data=None):
     if data.get("image_url"):
         embed.set_image(url=data["image_url"])
     
-    embed.set_footer(text=f"ID Ивента: {data['id']}")
+    # Установка футера
+    if icon_url:
+        embed.set_footer(text="Calogero Famq", icon_url=icon_url)
+    else:
+        embed.set_footer(text="Calogero Famq") # Без иконки, если bot не передан
 
     return [embed]
+
 
 async def update_all_views(bot, data=None):
     """Обновляет сообщения админки и публичного канала."""
@@ -378,17 +390,17 @@ async def update_all_views(bot, data=None):
 class EventCreateModal(Modal):
     def __init__(self):
         components = [
-            TextInput(label="Название мероприятия", custom_id="name", placeholder="ВЗХ", required=True),
-            TextInput(label="Организатор", custom_id="organizer", placeholder="jozzylord", required=True),
+            TextInput(label="Название мероприятия", custom_id="name", placeholder="Капт", required=True),
+            TextInput(label="Организатор", custom_id="organizer", placeholder="Alexis", required=True),
             TextInput(label="Время", custom_id="time", placeholder="19:00", required=True),
-            TextInput(label="Слоты (число)", custom_id="slots", placeholder="90", value="90", required=True),
+            TextInput(label="Слоты (число)", custom_id="slots", placeholder="35", value="35", required=True),
             TextInput(label="Ссылка на скриншот (необяз.)", custom_id="image", required=False),
         ]
         super().__init__(title="Настройка мероприятия", components=components)
 
     async def callback(self, interaction: Interaction):
         try: slots = int(interaction.text_values["slots"])
-        except: return await interaction.response.send_message("❌ Слоты должны быть числом.", ephemeral=True)
+        except: return await interaction.response.send_message("Слоты должны быть числом.", ephemeral=True)
         
         close_all_active_events()
         event_id = str(uuid.uuid4())[:8]
@@ -408,7 +420,7 @@ class EventCreateModal(Modal):
         }
         
         pub_chan = interaction.guild.get_channel(EVENTS_CHANNEL_ID)
-        if not pub_chan: return await interaction.response.send_message("❌ Нет публичного канала.", ephemeral=True)
+        if not pub_chan: return await interaction.response.send_message("Нет публичного канала.", ephemeral=True)
         
         embeds = generate_admin_embeds(new_event)
         pub_msg = await pub_chan.send(embeds=embeds, view=EventUserView(event_id))
@@ -436,7 +448,7 @@ class SmartManageModal(Modal):
         elif mode == "whitelist_remove":
             title, label, ph = "Удалить из White List", "ID (через пробел)", "123456789"
         elif mode == "manual_reserve_add":
-            title, label, ph = "Внести в РЕЗЕРВ (ID)", "ID или теги", "@User 123456789"
+            title, label, ph = "Внести в РЕЗЕРВ (ID)", "ID или теги", " 123456789"
         elif mode == "kick_user":
             title, label, ph = "Удаление участника", "Номер (1) или (р1)", "5"
             
@@ -912,7 +924,7 @@ class MainAdminView(View):
         if not struct["main"]: 
             return await interaction.response.send_message("❌ Основа пуста.", ephemeral=True)
         
-        msg = f"📣 **Внимание, основной состав!** {' '.join([f'<@{p['user_id']}>' for p in struct['main']])}"
+        msg = f"**Внимание, основной состав!** {' '.join([f'<@{p['user_id']}>' for p in struct['main']])}"
         event_channel = interaction.guild.get_channel(data["channel_id"])
         await event_channel.send(msg)
         await log_admin_action(interaction.bot, "Тег участников", "Тег основы в канале", interaction.user)
@@ -923,12 +935,11 @@ class MainAdminView(View):
         data = get_current_event()
         if not data: return
         
-        embed = Embed(color=0x2B2D31)
+        embed = Embed(color=AUX_COLOR)
         channel_mention = f"<#{data['channel_id']}>"
         embed.description = (
-            f"📣 **Открыта регистрация на ивент!**\n"
-            f"Регистрация: {channel_mention}\n"
-            f"⏰ Время: **{data['event_time']}**"
+            f"Регистрация откраты: {channel_mention}\n"
+            f"Время: **{data['event_time']}**"
         )
         
         target = interaction.guild.get_channel(EVENTS_TAG_CHANNEL_ID)
@@ -981,7 +992,7 @@ class EventsCog(commands.Cog):
                                  break
                          except: pass
                 
-                embeds = generate_admin_embeds(current)
+                embeds = generate_admin_embeds(current, bot=self.bot)
                 if panel_msg:
                     await panel_msg.edit(embeds=embeds, view=MainAdminView())
                 else:

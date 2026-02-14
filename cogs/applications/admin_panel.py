@@ -114,7 +114,7 @@ class TextFieldEditorModal(Modal):
                 embed = Embed(
                     title="✅ Поле сохранено!",
                     description=f"**Вопрос:** {new_field['label']}\n**Тип:** {'Короткий ответ' if new_field['style']=='short' else 'Длинный ответ'}\n**Обязательно:** {'Да' if new_field['required'] else 'Нет'}",
-                    color=0x3BA55D
+                    color=disnake.Color.from_rgb(54, 57, 63)
                 )
                 await inter.response.send_message(embed=embed, ephemeral=True)
             
@@ -124,7 +124,7 @@ class TextFieldEditorModal(Modal):
             req_embed = Embed(
                 title="Настройка поля",
                 description="Нужно ли обязательно отвечать на этот вопрос?",
-                color=0x5865F2
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             await interaction.response.send_message(embed=req_embed, view=required_view, ephemeral=True)
             
@@ -173,14 +173,14 @@ class FieldDeleteSelectView(View):
                 embed = Embed(
                     title="🗑️ Поле удалено",
                     description=f"Удален вопрос: **{deleted_field['label']}**",
-                    color=0x3BA55D
+                    color=disnake.Color.from_rgb(54, 57, 63)
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 error_embed = Embed(
                     title="❌ Ошибка",
                     description="Поле не найдено!",
-                    color=0xED4245
+                    color=disnake.Color.from_rgb(54, 57, 63)
                 )
                 await interaction.response.send_message(embed=error_embed, ephemeral=True)
         
@@ -281,9 +281,9 @@ class ApplicationAdminSelect(StringSelect):
                         await channel.send(
                             content="@everyone", 
                             embed=Embed(
-                                title="📢 Набор открыт!",
+                                title="Набор открыт!",
                                 description="Прием заявок в семью снова открыт. Ждем ваших анкет!",
-                                color=0x3BA55D
+                                color=disnake.Color.from_rgb(54, 57, 63)
                             ),
                             delete_after=300 # Удалить через 5 минут, чтобы не спамить
                         )
@@ -352,7 +352,7 @@ class ApplicationAdminSelect(StringSelect):
         embed = Embed(
             title="⚙️ Конструктор анкеты",
             description="\n\n".join(fields_desc) if fields_desc else "Нет вопросов",
-            color=0x5865F2
+            color=disnake.Color.from_rgb(54, 57, 63)
         )
         
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -364,12 +364,12 @@ class ApplicationAdminSelect(StringSelect):
             error_embed = Embed(
                 title="❌ Форма пуста",
                 description="Анкета не содержит вопросов.",
-                color=0xED4245
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
             return
             
-        embed = Embed(title="📋 Предпросмотр анкеты", color=0x5865F2)
+        embed = Embed(title="📋 Предпросмотр анкеты", color=disnake.Color.from_rgb(54, 57, 63))
         for i, field in enumerate(current_form, 1):
             embed.add_field(name=f"{i}. {field['label']}", value=f"Подсказка: {field.get('placeholder', '-')}", inline=False)
             
@@ -381,13 +381,13 @@ class ApplicationAdminSelect(StringSelect):
             error_embed = Embed(
                 title="❌ Нечего удалять",
                 description="Анкета не содержит вопросов.",
-                color=0xED4245
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
             return
         
         await interaction.response.send_message(
-            embed=Embed(title="Удаление вопроса", description="Выберите вопрос для удаления:", color=0xFF5555),
+            embed=Embed(title="Удаление вопроса", description="Выберите вопрос для удаления:", color=disnake.Color.from_rgb(54, 57, 63)),
             view=FieldDeleteSelectView(),
             ephemeral=True
         )
@@ -399,7 +399,7 @@ class ApplicationAdminSelect(StringSelect):
         success_embed = Embed(
             title="🔄 Анкета сброшена",
             description="Анкета сброшена к стандартным настройкам.",
-            color=0x3BA55D
+            color=disnake.Color.from_rgb(54, 57, 63)
         )
         await interaction.response.send_message(embed=success_embed, ephemeral=True)
 
