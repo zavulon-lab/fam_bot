@@ -1,12 +1,58 @@
 import disnake
 from disnake.ext import commands
-from disnake import Embed, Interaction, TextInputStyle, ButtonStyle
+from disnake import Embed, Interaction, TextInputStyle, ButtonStyle, PermissionOverwrite
 from disnake.ui import View, Button, button, TextInput, Modal
-from datetime import datetime
-from constants import *
+from constants import CATEGORY_ID, PRIVATE_THREAD_ROLE_ID
 from database import get_private_channel, set_private_channel
 
-# === 1. МОДАЛКА (ФОРМА) ===
+
+async def get_target_category(guild: disnake.Guild, base_category_id: int):
+    base_category = guild.get_channel(base_category_id)
+    if not base_category:
+        return None
+
+    if len(base_category.channels) < 50:
+        return base_category
+
+    base_name = base_category.name
+    
+    candidate_categories = []
+    
+    for cat in guild.categories:
+        if cat.id == base_category.id:
+            continue
+            
+        if cat.name.startswith(base_name):
+            parts = cat.name.split()
+            if parts[-1].isdigit():
+                candidate_categories.append(cat)
+    
+    candidate_categories.sort(key=lambda x: int(x.name.split()[-1]))
+
+    for cat in candidate_categories:
+        if len(cat.channels) < 50:
+            return cat
+
+    
+    if not candidate_categories:
+        next_num = 2 
+    else:
+        last_cat = candidate_categories[-1]
+        last_num = int(last_cat.name.split()[-1])
+        next_num = last_num + 1
+
+    new_name = f"{base_name} {next_num}"
+    
+    new_category = await guild.create_category(
+        name=new_name,
+        overwrites=base_category.overwrites,
+        position=base_category.position + next_num, 
+        reason="Автоматическое создание новой категории (лимит 50 каналов)"
+    )
+    
+    return new_category
+
+
 class CreatePortfolioModal(Modal):
     def __init__(self):
         components = [
@@ -28,79 +74,72 @@ class CreatePortfolioModal(Modal):
         guild = interaction.guild
         user = interaction.user
 
-        # 1. Проверка наличия канала в БД
-        existing_id = get_private_channel(str(user.id))
-        if existing_id:
-            existing_channel = guild.get_channel(existing_id)
-            if existing_channel:
+        # Проверка БД
+        existing_channel_id = get_private_channel(str(user.id))
+        if existing_channel_id:
+            chan = guild.get_channel(existing_channel_id)
+            if chan:
                 await interaction.followup.send(
-                    embed=Embed(description=f"⚠️ У вас уже есть личный портфель: {existing_channel.mention}", color=0xFFA500), 
+                    f"У вас уже есть портфель: {chan.mention}", 
                     ephemeral=True
                 )
                 return
-            # Если в БД есть, а канала нет (удален ручками) — код пойдет дальше и создаст новый.
 
-        # 2. Поиск категории
         try:
-            category = guild.get_channel(CATEGORY_ID)
-            if not category:
-                await interaction.followup.send(embed=Embed(description="❌ Категория для портфелей не найдена.", color=0xFF0000), ephemeral=True)
+            target_category = await get_target_category(guild, CATEGORY_ID)
+            
+            if not target_category:
+                await interaction.followup.send("Ошибка: Базовая категория не найдена в конфиге.", ephemeral=True)
                 return
+
+            safe_name = nickname.strip().lower().replace(" ", "-")
             
-            # Если категория переполнена (50 каналов), ищем следующую или создаем
-            if len(category.channels) >= 50:
-                 # Простой поиск соседней категории с тем же названием
-                 found_next = False
-                 for cat in guild.categories:
-                    if cat.name.startswith(category.name) and len(cat.channels) < 50:
-                        category = cat
-                        found_next = True
-                        break
-                 # Если не нашли — можно было бы создать новую, но пока просто ошибку или используем последнюю
+            overwrites = {
+                guild.default_role: PermissionOverwrite(view_channel=False),
+                user: PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True),
+                guild.me: PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
+            }
             
-            # 3. Создание канала
+            checker_role = guild.get_role(PRIVATE_THREAD_ROLE_ID)
+            if checker_role:
+                overwrites[checker_role] = PermissionOverwrite(view_channel=True, send_messages=True)
+
             new_channel = await guild.create_text_channel(
-                name=nickname.lower().replace(" ", "-"), 
-                category=category, 
-                reason=f"Портфель для {nickname}"
+                name=safe_name,
+                category=target_category,
+                overwrites=overwrites,
+                topic=f"Владелец: {user.mention} ({user.id})",
+                reason=f"Портфель: {nickname}"
             )
-            
-            # 4. Настройка прав
-            # Everyone - не видит
-            await new_channel.set_permissions(guild.default_role, view_channel=False)
-            # Владелец - видит, пишет, кидает файлы
-            await new_channel.set_permissions(user, view_channel=True, send_messages=True, attach_files=True)
-            
-            # Роль проверяющих (PRIVATE_THREAD_ROLE_ID) - видит
-            role_checker = guild.get_role(PRIVATE_THREAD_ROLE_ID)
-            if role_checker: 
-                await new_channel.set_permissions(role_checker, view_channel=True)
-            
-            # 5. Сохранение в БД
+
             set_private_channel(str(user.id), new_channel.id)
             
+            embed_welcome = Embed(
+                title=f"<:freeiconcreatefolder12075409:1472663668205555784> Портфель: {nickname}",
+                description=f"Владелец: {user.mention}\nКанал создан в категории: **{target_category.name}**",
+                color=disnake.Color.from_rgb(54, 57, 63)
+            )
+            await new_channel.send(content=user.mention, embed=embed_welcome)
+
             await interaction.followup.send(
-                embed=Embed(description=f"✅ Ваш личный канал создан: {new_channel.mention}", color=0x3BA55D), 
+                f"Портфель создан: {new_channel.mention}", 
                 ephemeral=True
             )
-            
+
         except Exception as e:
-            print(f"[Portfolio] Error: {e}")
-            await interaction.followup.send(embed=Embed(description="❌ Произошла ошибка при создании канала.", color=0xFF0000), ephemeral=True)
+            print(f"[Portfolio Error] {e}")
+            await interaction.followup.send(f"Ошибка: {e}", ephemeral=True)
 
 
-# === 2. VIEW С КНОПКОЙ (Вместо селекта) ===
 class PortfolioView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @button(label="Создать личный портфель", style=ButtonStyle.primary, emoji="📁", custom_id="btn_create_portfolio")
+    @button(label="Создать личный портфель", style=ButtonStyle.primary, emoji="<:freeiconcreatefolder12075409:1472663668205555784>", custom_id="btn_create_portfolio")
     async def create_portfolio_btn(self, button: Button, interaction: Interaction):
-        # Просто открываем модалку. Никаких сбросов селектов не нужно, так как это кнопка.
         await interaction.response.send_modal(CreatePortfolioModal())
 
 
-# === 3. COG ===
 class PortfolioCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

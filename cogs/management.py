@@ -1,6 +1,7 @@
 import asyncio
 import disnake
 from disnake.ext import commands
+from datetime import datetime, timedelta, timezone
 from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, ChannelType, SelectOption
 from disnake.ui import View, button, Button, StringSelect, Modal, TextInput
 from datetime import datetime
@@ -120,7 +121,7 @@ class ThreadSelect(StringSelect):
             options.append(SelectOption(
                 label=label,
                 value=str(thread.id),
-                emoji="#️⃣"
+                emoji="<:freeiconbranch4765562:1472673844522127370>"
             ))
             
         super().__init__(
@@ -190,7 +191,7 @@ class ThreadSelectView(View):
             next_btn.callback = self.next_callback
             self.add_item(next_btn)
             
-        cancel_btn = Button(label="🔙 Вернуться к выбору типа", style=ButtonStyle.gray, row=2)
+        cancel_btn = Button(label="Вернуться к выбору типа", style=ButtonStyle.gray, row=2, emoji="<:freeiconhistory1800170:1472662096696049916>")
         cancel_btn.callback = self.cancel_callback
         self.add_item(cancel_btn)
 
@@ -210,7 +211,7 @@ class ThreadSelectView(View):
         await interaction.response.edit_message(
             content=None,
             embed=Embed(
-                title="📹 Как оформить откат",
+                title="<:freeiconyoutube1384060:1472661242941411458> Как оформить откат",
                 description="Выберите тип мероприятия в меню ниже:",
                 color=disnake.Color.from_rgb(54, 57, 63)
             ),
@@ -221,8 +222,8 @@ class ThreadSelectView(View):
 class CategorySelect(StringSelect):
     def __init__(self):
         options = [
-            SelectOption(label="MCL", value="mcl", description="MCL", emoji="🛡️"),
-            SelectOption(label="Капт", value="capt", description="Капт", emoji="⚔️"),
+            SelectOption(label="MCL", value="mcl", description="MCL", emoji="<:eb779770e48c4979a42aaaf8ee1e6777:1472672359831048384>"),
+            SelectOption(label="Капт", value="capt", description="Капт", emoji="<:freeiconcombat7955494:1472672779814834278>"),
         ]
         super().__init__(placeholder="Выберите тип мероприятия...", options=options, custom_id="guide_category_select")
 
@@ -244,9 +245,25 @@ class CategorySelect(StringSelect):
              try: threads = await channel.active_threads()
              except: pass
 
+        if threads:
+            now = datetime.now(timezone.utc)
+            cutoff = now - timedelta(days=7) 
+            
+            filtered_threads = []
+            for t in threads:
+                created_at = t.created_at
+                if created_at:
+                    if created_at.tzinfo is None:
+                         created_at = created_at.replace(tzinfo=timezone.utc)
+                    
+                    if created_at > cutoff:
+                        filtered_threads.append(t)
+            
+            threads = filtered_threads
+
         if not threads:
             await interaction.response.edit_message(
-                content=f"В канале {channel.mention} нет активных событий.",
+                content=f"В канале {channel.mention} нет активных событий за последнюю неделю.",
                 view=RollbackGuideView() 
             )
             return
@@ -254,10 +271,11 @@ class CategorySelect(StringSelect):
         paginated_view = ThreadSelectView(threads, page=0)
         
         await interaction.response.edit_message(
-            content=f"📂 События в канале **{channel.name}**:\nВыберите ветку для загрузки отката:",
+            content=f"<:freeiconopenfolder12075402:1472674638239633590> События в канале **{channel.name}** (за последние 7 дней):\nВыберите ветку для загрузки отката:",
             embed=None,
             view=paginated_view
         )
+
 
 class RollbackGuideView(View):
     def __init__(self):
@@ -290,8 +308,8 @@ class AdminCreateThreadModal(Modal):
             )
             await thread.send(
                 embed=Embed(
-                    description=f"📍 **Событие создано.**\nЗагружайте откаты через 'Личный кабинет'.\n**Администратор:** {interaction.user.mention}",
-                    color=0x5865F2
+                    description=f"**Событие создано.**\n**Администратор:** {interaction.user.mention}",
+                    color=disnake.Color.from_rgb(54, 57, 63)
                 )
             )
             await interaction.response.send_message(f"Ветка события создана: {thread.mention}", ephemeral=True)
@@ -302,8 +320,8 @@ class AdminCreateThreadModal(Modal):
 class AdminChannelSelect(StringSelect):
     def __init__(self):
         options = [
-            SelectOption(label="MCL", value="mcl", emoji="🛡️"),
-            SelectOption(label="Капт", value="capt", emoji="⚔️"),
+            SelectOption(label="MCL", value="mcl", emoji="<:eb779770e48c4979a42aaaf8ee1e6777:1472672359831048384>"),
+            SelectOption(label="Капт", value="capt", emoji="<:freeiconcombat7955494:1472672779814834278>"),
         ]
         super().__init__(
             placeholder="Создать событие (выберите канал)...", 
@@ -324,7 +342,7 @@ class AdminChannelSelect(StringSelect):
             
             asyncio.create_task(self.reset_menu(interaction.message))
         else:
-            await interaction.response.send_message(f"❌ Канал {channel_id} не найден.", ephemeral=True)
+            await interaction.response.send_message(f"Канал {channel_id} не найден.", ephemeral=True)
             # Тоже сбрасываем, чтобы убрать выделение
             asyncio.create_task(self.reset_menu(interaction.message))
 
@@ -371,7 +389,7 @@ class ManagementCog(commands.Cog):
                 embed = Embed(
                     title="Админ-панель событий",
                     description="Управление ветками для откатов и настройки.",
-                    color=0x2B2D31,
+                    color=disnake.Color.from_rgb(54, 57, 63),
                 )
                 
                 last_msg = None

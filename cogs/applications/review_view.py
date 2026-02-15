@@ -169,8 +169,6 @@ class ApplicationReviewView(View):
         await interaction.followup.send(f"❌ Заявка {member.mention} отклонена.", ephemeral=True)
 
 
-    # === ЛОГИКА ПРИНЯТИЯ (ВНУТРЕННЯЯ) ===
-    # === ЛОГИКА ПРИНЯТИЯ (ВНУТРЕННЯЯ) ===
     async def process_acceptance(self, interaction: Interaction, member: disnake.Member, curator: disnake.Member, message: disnake.Message):
         """
         ФИНАЛЬНОЕ ПРИНЯТИЕ ПОСЛЕ ОБЗВОНА.
@@ -369,17 +367,16 @@ class ApplicationReviewView(View):
                 description=(
                     f"Администратор **{interaction.user.display_name}** хочет задать вам вопросы по поводу вашей заявки.\n\n"
                     f"Пожалуйста, перейдите в созданный канал: {chan.mention}\n"
-                    f"([Прямая ссылка на канал]({chan.jump_url}))"
                 ),
-                color=0x5865F2
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             try:
                 await member.send(embed=dm_embed)
-                dm_status = "✅ Уведомление отправлено в ЛС."
+                dm_status = "Уведомление отправлено в ЛС."
             except Forbidden:
-                dm_status = "⚠️ ЛС закрыты, уведомление не отправлено."
+                dm_status = "ЛС закрыты, уведомление не отправлено."
             except Exception:
-                dm_status = "❌ Ошибка отправки ЛС."
+                dm_status = "Ошибка отправки ЛС."
 
             # Итоговое сообщение (удаляется через 20 секунд)
             await interaction.followup.send(
