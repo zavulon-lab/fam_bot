@@ -1,4 +1,5 @@
 import disnake
+from datetime import datetime
 from disnake.ext import commands
 from disnake import Embed, Interaction, TextInputStyle, ButtonStyle, PermissionOverwrite
 from disnake.ui import View, Button, button, TextInput, Modal
@@ -114,12 +115,16 @@ class CreatePortfolioModal(Modal):
 
             set_private_channel(str(user.id), new_channel.id)
             
-            embed_welcome = Embed(
-                title=f"<:freeiconcreatefolder12075409:1472663668205555784> Портфель: {nickname}",
-                description=f"Владелец: {user.mention}\nКанал создан в категории: **{target_category.name}**",
-                color=disnake.Color.from_rgb(54, 57, 63)
-            )
-            await new_channel.send(content=user.mention, embed=embed_welcome)
+            embed = Embed(
+            title="<:freeiconopenfolder12075402:1472674638239633590> Личный портфель",
+            description=(
+                f"**Владелец:** {user.mention}\n"
+                f"**Дата создания:** {datetime.now().strftime('%d.%m.%Y')}"
+            ),
+            color=disnake.Color.from_rgb(54, 57, 63)
+        )
+
+            await new_channel.send(content=user.mention, embed=embed)
 
             await interaction.followup.send(
                 f"Портфель создан: {new_channel.mention}", 

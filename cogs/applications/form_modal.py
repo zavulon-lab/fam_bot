@@ -64,12 +64,12 @@ class CompleteApplicationModal(Modal):
         try:
             guild = interaction.guild
             if not guild:
-                await interaction.followup.send(embed=Embed(title="❌ Ошибка", description="Сервер не найден!", color=0xED4245), ephemeral=True)
+                await interaction.followup.send(embed=Embed(title="Ошибка", description="Сервер не найден!", color=0xED4245), ephemeral=True)
                 return
 
             review_channel = guild.get_channel(APPLICATIONS_REVIEW_CHANNEL_ID)
             if not review_channel:
-                await interaction.followup.send(embed=Embed(title="❌ Ошибка конфигурации", description="Канал для заявок не найден.", color=0xED4245), ephemeral=True)
+                await interaction.followup.send(embed=Embed(title="Ошибка конфигурации", description="Канал для заявок не найден.", color=0xED4245), ephemeral=True)
                 return
 
             form_data = {}
@@ -147,4 +147,4 @@ class CompleteApplicationModal(Modal):
             import traceback
             traceback.print_exc()
             
-            await interaction.followup.send(embed=Embed(title="❌ Ошибка", description="Произошла ошибка при отправке заявки.", color=0xFF0000), ephemeral=True)
+            await interaction.followup.send(embed=Embed(title="Ошибка", description="Произошла ошибка при отправке заявки.", color=0xFF0000), ephemeral=True)

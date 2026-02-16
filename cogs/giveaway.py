@@ -29,13 +29,12 @@ def create_giveaway_embed(data: dict, bot_user: disnake.User):
     # Если розыгрыш активен — призыв к действию, если завершен — просто описание
     is_finished = data.get("status") == "finished"
     
-    
     embed = Embed(
         title="🎉 РОЗЫГРЫШ",
-        color= disnake.Color.from_rgb(54, 57, 63)
+        color=disnake.Color.from_rgb(54, 57, 63)
     )
     
-
+    # 1. Приз
     embed.add_field(
         name="<:freeicongiftbox837891:1472654707859390475> Приз", 
         value=f"```fix\n{data['prize']}\n```", 
@@ -124,7 +123,7 @@ class GiveawayPreviewView(View):
         super().__init__(timeout=600)
         self.data = data
 
-    @disnake.ui.button(label="Опубликовать", style=ButtonStyle.success, emoji="✅")
+    @disnake.ui.button(label="Опубликовать", style=ButtonStyle.success, emoji="<:tik:1472654073814581268>")
     async def confirm(self, button: Button, interaction: Interaction):
         if not self.data.get("id"):
             self.data["id"] = str(uuid.uuid4())[:8]
@@ -133,7 +132,7 @@ class GiveawayPreviewView(View):
         
         channel = interaction.guild.get_channel(GIVEAWAY_USER_CHANNEL_ID)
         if not channel:
-            await interaction.response.send_message("❌ Ошибка: Канал розыгрышей не найден в конфиге.", ephemeral=True)
+            await interaction.response.send_message("Ошибка: Канал розыгрышей не найден в конфиге.", ephemeral=True)
             return
 
         # === ОЧИСТКА КАНАЛА ПЕРЕД ПУБЛИКАЦИЕЙ ===
@@ -149,11 +148,11 @@ class GiveawayPreviewView(View):
         self.data["fixed_message_id"] = msg.id
         save_giveaway_data(self.data)
         
-        await interaction.response.edit_message(content=f"✅ Розыгрыш опубликован! [Перейти]({msg.jump_url})", view=None, embed=None)
+        await interaction.response.edit_message(content=f"Розыгрыш опубликован! [Перейти]({msg.jump_url})", view=None, embed=None)
 
-    @disnake.ui.button(label="Отмена", style=ButtonStyle.danger, emoji="❌")
+    @disnake.ui.button(label="Отмена", style=ButtonStyle.danger, emoji="<:cross:1472654174788255996>")
     async def cancel(self, button: Button, interaction: Interaction):
-        await interaction.response.edit_message(content="❌ Создание отменено.", view=None, embed=None)
+        await interaction.response.edit_message(content="Создание отменено.", view=None, embed=None)
 
 
 class GiveawayEditModal(Modal):
@@ -173,7 +172,7 @@ class GiveawayEditModal(Modal):
             if w_count < 1 or w_count > MAX_WINNERS: raise ValueError
             end_dt = datetime.strptime(interaction.text_values["end_time"], "%Y-%m-%d %H:%M")
         except ValueError:
-            await interaction.response.send_message(f"❌ Ошибка данных! Проверьте число победителей и формат даты.", ephemeral=True)
+            await interaction.response.send_message(f"Ошибка данных! Проверьте число победителей и формат даты.", ephemeral=True)
             return
 
         temp_data = {
@@ -190,7 +189,7 @@ class GiveawayEditModal(Modal):
         }
 
         preview_embed = create_giveaway_embed(temp_data, interaction.bot.user)
-        preview_embed.title = "📋 Предпросмотр"
+        preview_embed.title = "<:freeiconrules5692161:1472654721117589606> Предпросмотр"
         
         await interaction.response.send_message(embed=preview_embed, view=GiveawayPreviewView(temp_data), ephemeral=True)
 
@@ -210,14 +209,14 @@ class WinnerSelectModal(Modal):
     async def callback(self, interaction: Interaction):
         data = load_giveaway_data()
         if not data or data.get("status") != "active":
-            await interaction.response.send_message("❌ Нет активного розыгрыша.", ephemeral=True)
+            await interaction.response.send_message("Нет активного розыгрыша.", ephemeral=True)
             return
 
         try:
             input_text = interaction.text_values["winners"].replace(",", " ").split()
             winner_ids = [int(x) for x in input_text]
         except ValueError:
-            await interaction.response.send_message("❌ Ошибка: Введите только цифры ID.", ephemeral=True)
+            await interaction.response.send_message("Ошибка: Введите только цифры ID.", ephemeral=True)
             return
 
         guild = interaction.guild
@@ -229,9 +228,9 @@ class WinnerSelectModal(Modal):
         log_chan = guild.get_channel(GIVEAWAY_LOG_CHANNEL_ID)
         if log_chan:
             emb = Embed(
-                title="🔧 Ручной выбор победителей",
+                title="<:freeicontoolbox4873901:1472933974094647449> Ручной выбор победителей",
                 description=f"Администратор {interaction.user.mention} зафиксировал:\n" + ", ".join(mentions),
-                color=Color.orange()
+                color=disnake.Color.from_rgb(54, 57, 63)
             )
             await log_chan.send(embed=emb)
 
@@ -240,7 +239,7 @@ class WinnerSelectModal(Modal):
         data["preselected_at"] = datetime.now(timezone.utc).isoformat()
         save_giveaway_data(data)
         
-        await interaction.response.send_message(f"✅ Зафиксировано {len(winner_ids)} победителей.", ephemeral=True)
+        await interaction.response.send_message(f"Зафиксировано {len(winner_ids)} победителей.", ephemeral=True)
 
 
 class GiveawayJoinView(View):
@@ -253,7 +252,7 @@ class GiveawayJoinView(View):
         data = load_giveaway_data()
         
         if not data or str(data.get("id")) != str(self.giveaway_id) or data.get("status") != "active":
-            await interaction.response.send_message("❌ Этот розыгрыш уже завершен.", ephemeral=True)
+            await interaction.response.send_message("Этот розыгрыш уже завершен.", ephemeral=True)
             return
 
         uid = interaction.user.id
@@ -283,39 +282,39 @@ class GiveawayAdminPanel(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @disnake.ui.button(label="Создать", style=ButtonStyle.primary, emoji="➕", custom_id="adm_gw_create", row=0)
+    @disnake.ui.button(label="Создать", style=ButtonStyle.primary, emoji="<:freeiconplus1828819:1472681225935392858>", custom_id="adm_gw_create", row=0)
     async def create(self, button: Button, interaction: Interaction):
         await interaction.response.send_modal(GiveawayEditModal())
 
-    @disnake.ui.button(label="Тест Рандома", style=ButtonStyle.secondary, emoji="🎲", custom_id="adm_gw_reroll", row=0)
+    @disnake.ui.button(label="Тест Рандома", style=ButtonStyle.secondary, emoji="<:freeiconcasino1714041:1472931325920018665>", custom_id="adm_gw_reroll", row=0)
     async def reroll(self, button: Button, interaction: Interaction):
         data = load_giveaway_data()
         if not data or data["status"] != "active":
-            await interaction.response.send_message("❌ Нет активных розыгрышей.", ephemeral=True)
+            await interaction.response.send_message("Нет активных розыгрышей.", ephemeral=True)
             return
         
         participants = data.get("participants", [])
         if not participants:
-            await interaction.response.send_message("❌ Нет участников.", ephemeral=True)
+            await interaction.response.send_message("Нет участников.", ephemeral=True)
             return
         
         random_winner = random.choice(participants)
-        await interaction.response.send_message(f"🎲 Тестовый победитель: <@{random_winner}>", ephemeral=True)
+        await interaction.response.send_message(f"<:freeiconcasino1714041:1472931325920018665> Тестовый победитель: <@{random_winner}>", ephemeral=True)
 
-    @disnake.ui.button(label="Зафиксировать побед.", style=ButtonStyle.success, emoji="👑", custom_id="adm_gw_pick", row=1)
+    @disnake.ui.button(label="Зафиксировать побед.", style=ButtonStyle.success, emoji="<:freeicontrophy2498693:1472931555713224725>", custom_id="adm_gw_pick", row=1)
     async def pick(self, button: Button, interaction: Interaction):
         await interaction.response.send_modal(WinnerSelectModal())
 
-    @disnake.ui.button(label="Участники", style=ButtonStyle.gray, emoji="👥", custom_id="adm_gw_list", row=1)
+    @disnake.ui.button(label="Участники", style=ButtonStyle.gray, emoji="<:freeiconteam2763403:1472654736489451581>", custom_id="adm_gw_list", row=1)
     async def list_participants(self, button: Button, interaction: Interaction):
         data = load_giveaway_data()
         if not data:
-            await interaction.response.send_message("❌ Нет данных.", ephemeral=True)
+            await interaction.response.send_message("Нет данных.", ephemeral=True)
             return
 
         participants = data.get("participants", [])
         if not participants:
-            await interaction.response.send_message("❌ Список пуст.", ephemeral=True)
+            await interaction.response.send_message("Список пуст.", ephemeral=True)
             return
 
         view = ParticipantsPaginationView(participants)
@@ -341,7 +340,7 @@ class GiveawayCog(commands.Cog):
                 except: pass
 
                 embed = Embed(
-                    title="🎁 Управление розыгрышами",
+                    title="<:freeicongift1043476:1472930460341371021> Управление розыгрышами",
                     description=(
                         "**Панель администратора**\n"
                         "Здесь вы можете запускать новые ивенты, выбирать победителей и просматривать список участников.\n"
@@ -389,9 +388,10 @@ class GiveawayCog(commands.Cog):
             else:
                 winners.extend(pool)
 
-        # Сохраняем статус
+        # Сохраняем статус и ОЧИЩАЕМ участников
         data["status"] = "finished"
         data["winners"] = winners
+        data["participants"] = [] # <--- ОЧИСТКА СПИСКА УЧАСТНИКОВ
         data["finished_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         save_giveaway_data(data)
 
@@ -401,8 +401,6 @@ class GiveawayCog(commands.Cog):
             if chan and data.get("fixed_message_id"):
                 msg = await chan.fetch_message(data["fixed_message_id"])
                 
-                # Создаем эмбед через функцию (чтобы сохранить стилистику)
-                # Но так как статус уже 'finished', функция сама уберет призыв к действию и таймер
                 embed = create_giveaway_embed(data, self.bot.user)
                 
                 embed.title = "РОЗЫГРЫШ ЗАВЕРШЕН"
@@ -434,7 +432,7 @@ class GiveawayCog(commands.Cog):
 
         log_chan = guild.get_channel(GIVEAWAY_LOG_CHANNEL_ID)
         if log_chan:
-            emb = Embed(title="✅ Итоги розыгрыша", color=Color.green(), timestamp=datetime.now())
+            emb = Embed(title="Итоги розыгрыша", color=Color.green(), timestamp=datetime.now())
             emb.add_field(name="Приз", value=data["prize"])
             emb.add_field(name="Победители", value=", ".join([str(u) for u in winners]))
             emb.set_footer(text="Calogero Famq", icon_url=self.bot.user.display_avatar.url)

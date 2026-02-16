@@ -1,11 +1,10 @@
-"""Админ-панель для управления формой заявок"""
-
 import disnake
 from disnake import Embed, TextInputStyle, Interaction, ButtonStyle, SelectOption
 from disnake.ui import View, Button, Modal, TextInput, StringSelect
 from database import get_application_form, save_application_form, get_applications_status, set_applications_status
 from .utils import generate_custom_id, migrate_old_form_data
 from constants import APPLICATION_CHANNEL_ID
+
 
 class FieldTypeSelectView(View):
     """View с селектом для выбора типа поля"""
@@ -29,6 +28,7 @@ class FieldTypeSelectView(View):
         
         select.callback = select_callback
         self.add_item(select)
+
 
 class TextFieldEditorModal(Modal):
     """Редактор текстового поля"""
@@ -79,8 +79,8 @@ class TextFieldEditorModal(Modal):
             required_select = StringSelect(
                 placeholder="Это поле обязательно?",
                 options=[
-                    SelectOption(label="Да, обязательно", value="yes", emoji="✅"),
-                    SelectOption(label="Нет, можно пропустить", value="no", emoji="❌")
+                    SelectOption(label="Да, обязательно", value="yes", emoji="<:tik:1472654073814581268>"),
+                    SelectOption(label="Нет, можно пропустить", value="no", emoji="<:cross:1472654174788255996>")
                 ],
                 custom_id="required_select"
             )
@@ -112,7 +112,7 @@ class TextFieldEditorModal(Modal):
                 save_application_form(current_form)
                 
                 embed = Embed(
-                    title="✅ Поле сохранено!",
+                    title="Поле сохранено!",
                     description=f"**Вопрос:** {new_field['label']}\n**Тип:** {'Короткий ответ' if new_field['style']=='short' else 'Длинный ответ'}\n**Обязательно:** {'Да' if new_field['required'] else 'Нет'}",
                     color=disnake.Color.from_rgb(54, 57, 63)
                 )
@@ -131,11 +131,12 @@ class TextFieldEditorModal(Modal):
         except Exception as e:
             print(f"[ERROR] Ошибка в TextFieldEditorModal: {e}")
             error_embed = Embed(
-                title="❌ Ошибка",
+                title="Ошибка",
                 description=f"Произошла ошибка: `{str(e)}`",
                 color=0xED4245
             )
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
 
 class FieldDeleteSelectView(View):
     """View для удаления поля"""
@@ -171,14 +172,14 @@ class FieldDeleteSelectView(View):
                 save_application_form(current)
                 
                 embed = Embed(
-                    title="🗑️ Поле удалено",
+                    title="<:freeicondelete3625005:1472679616589205604> Поле удалено",
                     description=f"Удален вопрос: **{deleted_field['label']}**",
                     color=disnake.Color.from_rgb(54, 57, 63)
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 error_embed = Embed(
-                    title="❌ Ошибка",
+                    title="Ошибка",
                     description="Поле не найдено!",
                     color=disnake.Color.from_rgb(54, 57, 63)
                 )
@@ -187,19 +188,117 @@ class FieldDeleteSelectView(View):
         select.callback = select_callback
         self.add_item(select)
 
+
+class CustomAnnouncementModal(Modal):
+    def __init__(self, interaction_original: Interaction):
+        self.interaction_original = interaction_original
+        components = [
+            TextInput(
+                label="Текст объявления",
+                custom_id="announcement_text",
+                style=TextInputStyle.paragraph,
+                required=True,
+                placeholder="Например: Открыт набор в семью! Ждем активных игроков...",
+                max_length=2000
+            )
+        ]
+        super().__init__(title="Объявление об открытии набора", components=components)
+
+    async def callback(self, interaction: disnake.ModalInteraction):
+        announcement_text = interaction.text_values["announcement_text"].strip()
+        
+        # Отправляем кастомное объявление
+        await self.send_announcement(interaction, announcement_text, is_custom=True)
+
+    async def send_announcement(self, interaction: Interaction, text: str, is_custom: bool):
+        try:
+            channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
+            if channel:
+                embed = Embed(
+                    title="<:freeiconpowerbutton4943421:1472679504714666056> Набор открыт!",
+                    description=text,
+                    color=disnake.Color.from_rgb(54, 57, 63)
+                )
+                
+                # Отправляем с тегом everyone
+                announcement_msg = await channel.send(content="@everyone", embed=embed)
+                
+                # Сохраняем ID объявления в БД, чтобы удалить при закрытии
+                from database import save_announcement_message_id
+                save_announcement_message_id(announcement_msg.id)
+                
+                # Уведомляем админа
+                success_embed = Embed(
+                    title="<:tik:1472654073814581268> Объявление отправлено",
+                    description=f"{'Ваше' if is_custom else 'Стандартное'} объявление опубликовано в канале заявок.",
+                    color=disnake.Color.from_rgb(54, 57, 63)
+                )
+                await interaction.response.send_message(embed=success_embed, ephemeral=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка отправки объявления: {e}")
+            error_embed = Embed(
+                title="Ошибка",
+                description=f"Не удалось отправить объявление: {e}",
+                color=0xED4245
+            )
+            await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+
+class AnnouncementChoiceView(View):
+    def __init__(self, interaction_original: Interaction):
+        super().__init__(timeout=120)
+        self.interaction_original = interaction_original
+
+    @disnake.ui.button(label="Написать своё объявление", style=ButtonStyle.primary, emoji="<:freeiconadd2013845:1472654674976051200>")
+    async def custom_announcement(self, button: Button, interaction: Interaction):
+        await interaction.response.send_modal(CustomAnnouncementModal(self.interaction_original))
+
+    @disnake.ui.button(label="Отправить стандартное", style=ButtonStyle.secondary, emoji="<:freeiconmegaphone716224:1472678446454014046>")
+    async def default_announcement(self, button: Button, interaction: Interaction):
+        default_text = "Прием заявок в семью снова открыт. Ждем ваших анкет!"
+        
+        try:
+            channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
+            if channel:
+                embed = Embed(
+                    title="Набор открыт!",
+                    description=default_text,
+                    color=disnake.Color.from_rgb(54, 57, 63)
+                )
+                
+                announcement_msg = await channel.send(content="@everyone", embed=embed)
+                
+                # Сохраняем ID
+                from database import save_announcement_message_id
+                save_announcement_message_id(announcement_msg.id)
+                
+                success_embed = Embed(
+                    title="Объявление отправлено",
+                    description="Стандартное объявление опубликовано.",
+                    color=disnake.Color.from_rgb(54, 57, 63)
+                )
+                await interaction.response.send_message(embed=success_embed, ephemeral=True)
+        except Exception as e:
+            print(f"[ERROR] Ошибка: {e}")
+            await interaction.response.send_message(
+                embed=Embed(title="Ошибка", description=f"{e}", color=0xED4245),
+                ephemeral=True
+            )
+
+
 class ApplicationAdminSelect(StringSelect):
     """Главное меню админ-панели"""
     def __init__(self):
         self.is_enabled = get_applications_status()
-        status_emoji = "✅" if self.is_enabled else "⛔"
+        status_emoji = "<:freeiconpowerbutton4943421:1472679504714666056>" if self.is_enabled else "<:freeiconstop394592:1472679253177925808>"
         status_label = "ВЫКЛЮЧИТЬ прием заявок" if self.is_enabled else "ВКЛЮЧИТЬ прием заявок"
         
         options = [
-            SelectOption(label="Настроить форму", value="configure_form", description="Добавить или изменить вопросы", emoji="⚙️"),
-            SelectOption(label="Посмотреть текущую форму", value="view_form", description="Как выглядит анкета сейчас", emoji="📋"),
-            SelectOption(label="Удалить вопрос", value="delete_field", description="Убрать лишний вопрос", emoji="🗑️"),
+            SelectOption(label="Настроить форму", value="configure_form", description="Добавить или изменить вопросы", emoji="<:freeicongear889744:1472678585277092084>"),
+            SelectOption(label="Посмотреть текущую форму", value="view_form", description="Как выглядит анкета сейчас", emoji="<:freeiconrules5692161:1472654721117589606>"),
+            SelectOption(label="Удалить вопрос", value="delete_field", description="Убрать лишний вопрос", emoji="<:freeicondelete3625005:1472679616589205604>"),
             SelectOption(label=status_label, value="toggle_status", description="Открыть/Закрыть набор", emoji=status_emoji),
-            SelectOption(label="Сбросить настройки", value="reset_form", description="Вернуть стандартную анкету", emoji="🔄"),
+            SelectOption(label="Сбросить настройки", value="reset_form", description="Вернуть стандартную анкету", emoji="<:freeiconhistory1800170:1472662096696049916>"),
         ]
         
         super().__init__(
@@ -211,7 +310,7 @@ class ApplicationAdminSelect(StringSelect):
     async def callback(self, interaction: Interaction):
         if not interaction.user.guild_permissions.administrator:
             error_embed = Embed(
-                title="🔒 Доступ запрещен",
+                title="Доступ запрещен",
                 description="Доступно только администраторам!",
                 color=0xED4245
             )
@@ -247,49 +346,61 @@ class ApplicationAdminSelect(StringSelect):
         status_text = "ОТКРЫТ" if new_status else "ЗАКРЫТ"
         color = 0x3BA55D if new_status else 0xED4245
         
-        # 1. Отправляем уведомление админу
         embed = Embed(
-            title="✅ Статус набора изменен" if new_status else "⛔ Статус набора изменен",
+            title="<:freeiconpowerbutton4943421:1472679504714666056> Статус набора изменен" if new_status else "<:freeiconstop394592:1472679253177925808> Статус набора изменен",
             description=f"Прием заявок теперь **{status_text}**.",
             color=color
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        # 2. Обновляем админ-меню (чтобы сменилась кнопка вкл/выкл)
         try:
             await interaction.message.edit(view=ApplicationAdminView())
         except:
             pass
         
-        # 3. Обновляем ПУБЛИЧНОЕ сообщение (делаем кнопку неактивной/активной)
-        # Импортируем View здесь, чтобы избежать циклических импортов
         from .submit_button import ApplicationChannelView
         
         try:
             channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
             if channel:
-                # Ищем последнее сообщение бота в канале заявок
                 async for msg in channel.history(limit=5):
-                    if msg.author == interaction.guild.me and msg.embeds:
-                        # Обновляем View с новым статусом
-                        await msg.edit(view=ApplicationChannelView(interaction.bot))
-                        break
-                
-                # Если ОТКРЫЛИ набор - тегаем everyone
-                if new_status:
-                    try:
-                        await channel.send(
-                            content="@everyone", 
-                            embed=Embed(
-                                title="Набор открыт!",
-                                description="Прием заявок в семью снова открыт. Ждем ваших анкет!",
-                                color=disnake.Color.from_rgb(54, 57, 63)
-                            ),
-                            delete_after=300 # Удалить через 5 минут, чтобы не спамить
-                        )
-                    except: pass
+                    if msg.author == interaction.guild.me and msg.embeds and len(msg.embeds) > 0:
+                        if "Calogero Famq" in msg.embeds[0].footer.text if msg.embeds[0].footer else False:
+                            await msg.edit(view=ApplicationChannelView(interaction.bot))
+                            break
         except Exception as e:
-            print(f"[ERROR] Не удалось обновить публичное сообщение: {e}")
+            print(f"[ERROR] Обновление публичного View: {e}")
+        
+        if new_status:
+            choice_embed = Embed(
+                title="Отправить объявление?",
+                description="Хотите написать своё объявление об открытии набора или отправить стандартное?",
+                color=disnake.Color.from_rgb(54, 57, 63)
+            )
+            await interaction.followup.send(
+                embed=choice_embed,
+                view=AnnouncementChoiceView(interaction),
+                ephemeral=True
+            )
+        
+        else:
+            try:
+                from database import get_announcement_message_id, clear_announcement_message_id
+                announcement_id = get_announcement_message_id()
+                
+                if announcement_id:
+                    channel = interaction.guild.get_channel(APPLICATION_CHANNEL_ID)
+                    if channel:
+                        try:
+                            announcement_msg = await channel.fetch_message(announcement_id)
+                            await announcement_msg.delete()
+                            clear_announcement_message_id()
+                        except disnake.NotFound:
+                            clear_announcement_message_id()
+                        except Exception as e:
+                            print(f"[ERROR] Удаление объявления: {e}")
+            except Exception as e:
+                print(f"[ERROR] Ошибка при удалении объявления: {e}")
 
     async def show_form_configuration(self, interaction: Interaction):
         current_form = get_application_form()
@@ -345,12 +456,12 @@ class ApplicationAdminSelect(StringSelect):
         
         fields_desc = []
         for i, field in enumerate(current_form, 1):
-            req_mark = "✅" if field["required"] else "❌"
+            req_mark = "<:tik:1472654073814581268>" if field["required"] else "<:cross:1472654174788255996>"
             type_mark = "Короткий" if field.get("style") == "short" else "Длинный"
             fields_desc.append(f"**{i}. {field['label']}**\n└ {type_mark} | Обязательно: {req_mark}")
         
         embed = Embed(
-            title="⚙️ Конструктор анкеты",
+            title="<:freeicongear889744:1472678585277092084> Конструктор анкеты",
             description="\n\n".join(fields_desc) if fields_desc else "Нет вопросов",
             color=disnake.Color.from_rgb(54, 57, 63)
         )
@@ -362,14 +473,14 @@ class ApplicationAdminSelect(StringSelect):
         
         if not current_form:
             error_embed = Embed(
-                title="❌ Форма пуста",
+                title="Форма пуста",
                 description="Анкета не содержит вопросов.",
                 color=disnake.Color.from_rgb(54, 57, 63)
             )
             await interaction.response.send_message(embed=error_embed, ephemeral=True)
             return
             
-        embed = Embed(title="📋 Предпросмотр анкеты", color=disnake.Color.from_rgb(54, 57, 63))
+        embed = Embed(title="<:freeiconrules5692161:1472654721117589606> Предпросмотр анкеты", color=disnake.Color.from_rgb(54, 57, 63))
         for i, field in enumerate(current_form, 1):
             embed.add_field(name=f"{i}. {field['label']}", value=f"Подсказка: {field.get('placeholder', '-')}", inline=False)
             
@@ -379,7 +490,7 @@ class ApplicationAdminSelect(StringSelect):
         current_form = get_application_form()
         if not current_form:
             error_embed = Embed(
-                title="❌ Нечего удалять",
+                title="Нечего удалять",
                 description="Анкета не содержит вопросов.",
                 color=disnake.Color.from_rgb(54, 57, 63)
             )
@@ -397,14 +508,14 @@ class ApplicationAdminSelect(StringSelect):
         save_application_form(get_default_application_form())
         
         success_embed = Embed(
-            title="🔄 Анкета сброшена",
+            title="<:freeiconhistory1800170:1472662096696049916> Анкета сброшена",
             description="Анкета сброшена к стандартным настройкам.",
             color=disnake.Color.from_rgb(54, 57, 63)
         )
         await interaction.response.send_message(embed=success_embed, ephemeral=True)
 
+
 class ApplicationAdminView(View):
-    """Главный View админ-панели"""
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(ApplicationAdminSelect())

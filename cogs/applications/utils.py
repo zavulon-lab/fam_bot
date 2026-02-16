@@ -1,5 +1,5 @@
 """Вспомогательные функции для модуля заявок"""
-
+import disnake
 import re
 from disnake import Embed, CategoryChannel, HTTPException
 from datetime import datetime
@@ -133,13 +133,13 @@ async def create_personal_file(guild, member, curator):
         
         # Приветственное сообщение
         embed = Embed(
-            title="📂 Личное дело",
+            title="<:freeiconopenfolder12075402:1472674638239633590> Личный портфель",
             description=(
                 f"**Владелец:** {member.mention}\n"
                 f"**Куратор:** {curator.mention}\n"
                 f"**Дата создания:** {datetime.now().strftime('%d.%m.%Y')}"
             ),
-            color=0x2B2D31
+            color=disnake.Color.from_rgb(54, 57, 63)
         )
         embed.set_thumbnail(url=member.display_avatar.url)
         await personal_channel.send(f"{member.mention}", embed=embed)

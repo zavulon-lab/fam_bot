@@ -67,14 +67,14 @@ class CuratorSelectView(View):
         
         async def select_callback(interaction: Interaction):
             if interaction.data["values"][0] == "none":
-                await interaction.response.send_message("❌ Нет доступных кураторов.", ephemeral=True)
+                await interaction.response.send_message("Нет доступных кураторов.", ephemeral=True)
                 return
 
             curator_id = int(interaction.data["values"][0])
             curator = guild.get_member(curator_id)
             
             if not curator:
-                await interaction.response.send_message("❌ Куратор не найден!", ephemeral=True)
+                await interaction.response.send_message("Куратор не найден!", ephemeral=True)
                 return
             
             await self.original_view.process_acceptance(interaction, self.member, curator, self.original_message)
@@ -152,7 +152,7 @@ class ApplicationReviewView(View):
         result_embed = Embed(
             description=(
                 f"Заявка от пользователя {member.mention}\n\n"
-                f"На Вступление в семью была отклонена. ❌\n\n"
+                f"На Вступление в семью была отклонена. <:cross:1472654174788255996>\n\n"
                 f"Причина: {reason}\n"
                 f"Рассматривал заявку: {recruiter.mention}"
             ),
@@ -166,7 +166,7 @@ class ApplicationReviewView(View):
         # 2. ЛС
         await self.send_dm_embed(member, result_embed, content=member.mention)
 
-        await interaction.followup.send(f"❌ Заявка {member.mention} отклонена.", ephemeral=True)
+        await interaction.followup.send(f"<:cross:1472654174788255996> Заявка {member.mention} отклонена.", ephemeral=True)
 
 
     async def process_acceptance(self, interaction: Interaction, member: disnake.Member, curator: disnake.Member, message: disnake.Message):
@@ -195,9 +195,9 @@ class ApplicationReviewView(View):
             original_embed.color = 0x3BA55D
             
             # Добавляем разделитель или просто поля вниз, сохраняя анкету
-            original_embed.add_field(name="▬▬▬▬▬▬▬▬▬▬", value="**✅ ПРИНЯТ**", inline=False)
-            original_embed.add_field(name="👨‍🏫 Куратор", value=curator.mention, inline=True)
-            original_embed.add_field(name="🎖️ Рекрутер", value=recruiter.mention, inline=True)
+            original_embed.add_field(name="▬▬▬▬▬▬▬▬▬▬", value="**<:tik:1472654073814581268> ПРИНЯТ**", inline=False)
+            original_embed.add_field(name="<:freeiconcurator5301960:1472946853694668933> Куратор", value=curator.mention, inline=True)
+            original_embed.add_field(name="<:freeiconrecruiter2724952:1472947030937571358> Рекрутер", value=recruiter.mention, inline=True)
             
             await message.edit(embed=original_embed, view=None)
 
@@ -216,7 +216,7 @@ class ApplicationReviewView(View):
                 )
                 # Картинка Луны/Планеты
                 academy_embed.set_thumbnail(url="https://media.discordapp.net/attachments/1336423985794682974/1336423986381754409/6FDCFF59-EFBB-4D26-9E57-50B0F3D61B50.jpg") 
-                academy_embed.set_footer(text=f"ID: {member.id} • {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+                academy_embed.set_footer(text=f"{datetime.now().strftime('%d.%m.%Y %H:%M')}")
                 
                 await academy_channel.send(embed=academy_embed)
         except Exception as e:
@@ -229,15 +229,15 @@ class ApplicationReviewView(View):
             color=0x3BA55D
         ))
 
-        await interaction.followup.send(f"✅ {member.mention} принят. Лог отправлен в академию.", ephemeral=True)
+        await interaction.followup.send(f"<:tik:1472654073814581268> {member.mention} принят. Лог отправлен в академию.", ephemeral=True)
 
 
-    @button(label="✅ Принять (После обзвона)", style=ButtonStyle.success, custom_id="app_accept")
+    @button(label=" Принять (После обзвона)", style=ButtonStyle.success, custom_id="app_accept", emoji="<:tik:1472654073814581268>")
     async def accept_button(self, button: Button, interaction: Interaction):
         """Финал: Назначение куратора и выдача ролей"""
         member = await self.get_candidate(interaction)
         if not member:
-            await interaction.response.send_message("❌ Кандидат не найден.", ephemeral=True)
+            await interaction.response.send_message("Кандидат не найден.", ephemeral=True)
             return
 
         view = CuratorSelectView(original_view=self, member=member, original_message=interaction.message)
@@ -256,7 +256,7 @@ class ApplicationReviewView(View):
         await interaction.message.edit(embed=original_embed)
         await interaction.followup.send("👀 Статус обновлен.", ephemeral=True)
 
-    @button(label="📞 Вызвать на обзвон", style=ButtonStyle.primary, custom_id="app_call")
+    @button(label=" Вызвать на обзвон", style=ButtonStyle.primary, custom_id="app_call", emoji="<:freeiconcall3870799:1472668017170186331>")
     async def call_button(self, button: Button, interaction: Interaction):
         await interaction.response.defer(ephemeral=True)
         member = await self.get_candidate(interaction)
@@ -270,7 +270,7 @@ class ApplicationReviewView(View):
         result_embed = Embed(
             description=(
                 f"Заявка от пользователя {member.mention}\n\n"
-                f"На Вступление в семью была рассмотрена! ✅\n\n"
+                f"На Вступление в семью была рассмотрена! <:tik:1472654073814581268>\n\n"
                 f"Для прохода обзвона ожидаем вас в канале :\n"
                 f"{voice_mention}\n\n"
                 f"Рассматривал заявку: {recruiter.mention}"
@@ -287,13 +287,13 @@ class ApplicationReviewView(View):
 
         original_embed = interaction.message.embeds[0]
         original_embed.color = 0x5865F2
-        original_embed.title = "📞 Вызван на обзвон"
+        original_embed.title = "<:freeiconcall3870799:1472668017170186331> Вызван на обзвон"
         original_embed.set_footer(text=f"Вызвал: {recruiter.display_name}")
         await interaction.message.edit(embed=original_embed)
 
         await interaction.followup.send(f"{member.mention} вызван на обзвон.", ephemeral=True)
 
-    @button(label="❌ Отклонить", style=ButtonStyle.danger, custom_id="app_deny")
+    @button(label="Отклонить", style=ButtonStyle.danger, custom_id="app_deny", emoji="<:cross:1472654174788255996>")
     async def deny_button(self, button: Button, interaction: Interaction):
         member = await self.get_candidate(interaction)
         if not member:
@@ -309,7 +309,7 @@ class ApplicationReviewView(View):
         # Если кандидат не найден
         if not member: 
             await interaction.followup.send(
-                "❌ Кандидат не найден (возможно, вышел с сервера).", 
+                "Кандидат не найден (возможно, вышел с сервера).", 
                 ephemeral=True, 
                 delete_after=20
             )
@@ -322,7 +322,7 @@ class ApplicationReviewView(View):
             # Если категория не найдена
             if not cat:
                 await interaction.followup.send(
-                    "❌ Категория для заявок не найдена в настройках.", 
+                    "Категория для заявок не найдена в настройках.", 
                     ephemeral=True, 
                     delete_after=20
                 )
@@ -345,12 +345,11 @@ class ApplicationReviewView(View):
             app_url = f"https://discord.com/channels/{guild.id}/{interaction.channel.id}/{interaction.message.id}"
             
             chat_embed = Embed(
-                title="📋 Обсуждение заявки",
+                title="<:freeiconrules5692161:1472654721117589606> Обсуждение заявки",
                 description=f"Администратор {interaction.user.mention} создал этот чат для уточнения деталей.\n\n**[Перейти к сообщению с заявкой]({app_url})**",
                 color=0x2B2D31
             )
             
-            # Копируем поля из заявки
             if original_embed and original_embed.fields:
                 for f in original_embed.fields:
                     chat_embed.add_field(name=f.name, value=f.value, inline=f.inline)
@@ -358,10 +357,8 @@ class ApplicationReviewView(View):
             chat_embed.set_thumbnail(url=member.display_avatar.url)
             chat_embed.set_footer(text=f"ID: {member.id}")
 
-            # Отправляем сообщение в новый канал
             await chan.send(content=f"{member.mention}, администратор {interaction.user.mention} хочет уточнить детали вашей заявки.", embed=chat_embed)
             
-            # === ОТПРАВКА УВЕДОМЛЕНИЯ В ЛС ===
             dm_embed = Embed(
                 title="💬 Уточнение по заявке",
                 description=(
@@ -380,14 +377,14 @@ class ApplicationReviewView(View):
 
             # Итоговое сообщение (удаляется через 20 секунд)
             await interaction.followup.send(
-                f"✅ Чат создан: {chan.mention}\n{dm_status}", 
+                f"Чат создан: {chan.mention}\n{dm_status}", 
                 ephemeral=True, 
                 delete_after=20
             )
 
         except Exception as e:
             await interaction.followup.send(
-                f"❌ Ошибка при создании чата: {e}", 
+                f"Ошибка при создании чата: {e}", 
                 ephemeral=True, 
                 delete_after=20
             )

@@ -6,6 +6,7 @@ from typing import Optional, Dict, List
 from contextlib import contextmanager
 from datetime import datetime
 
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -13,7 +14,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 DB_PATH = "bot_data.db"
+
 
 @contextmanager
 def get_db_connection():
@@ -29,6 +32,7 @@ def get_db_connection():
         raise
     finally:
         conn.close()
+
 
 def init_db():
     """Инициализация базы данных"""
@@ -71,6 +75,14 @@ def init_db():
             )
         ''')
         
+        # --- ТАБЛИЦА ДЛЯ ОБЩИХ НАСТРОЕК (включая ID объявления) ---
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        
         # --- ТАБЛИЦА ДЛЯ РОЗЫГРЫШЕЙ ---
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS giveaways (
@@ -103,6 +115,7 @@ def init_db():
         logger.info("База данных инициализирована")
 
 
+
 # ========== ЛИЧНЫЕ КАНАЛЫ ==========
 def get_private_channel(user_id: str) -> Optional[int]:
     with get_db_connection() as conn:
@@ -111,6 +124,7 @@ def get_private_channel(user_id: str) -> Optional[int]:
         result = cursor.fetchone()
         return result['channel_id'] if result else None
 
+
 def set_private_channel(user_id: str, channel_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -118,6 +132,7 @@ def set_private_channel(user_id: str, channel_id: int):
             "INSERT OR REPLACE INTO private_channels (user_id, channel_id) VALUES (?, ?)",
             (user_id, channel_id)
         )
+
 
 # ========== СОЗДАННЫЕ КАНАЛЫ (ОТКАТЫ) ==========
 def add_created_channel(channel_id: int, creator_id: int, channel_name: str):
@@ -128,16 +143,19 @@ def add_created_channel(channel_id: int, creator_id: int, channel_name: str):
             (channel_id, creator_id, channel_name)
         )
 
+
 def delete_created_channel(channel_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM created_channels WHERE channel_id = ?", (channel_id,))
+
 
 def channel_exists(channel_id: int) -> bool:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM created_channels WHERE channel_id = ?", (channel_id,))
         return cursor.fetchone() is not None
+
 
 # ========== ФОРМА ЗАЯВОК ==========
 def save_application_form(form_fields: List[Dict]):
@@ -150,6 +168,7 @@ def save_application_form(form_fields: List[Dict]):
             (form_json,)
         )
 
+
 def get_application_form() -> List[Dict]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -158,10 +177,72 @@ def get_application_form() -> List[Dict]:
         if result: return json.loads(result['form_data'])
         else: return get_default_application_form()
 
+
 def get_default_application_form() -> List[Dict]:
     return [
-        {"type": "text_input", "label": "Ник | Статик", "custom_id": "name_static_age", "style": "short", "required": True, "placeholder": "Данные...", "min_length": None, "max_length": None, "options": []}
+        {
+            "type": "text_input", 
+            "label": "Ваш ник в игре | Статик", 
+            "custom_id": "nick_static", 
+            "style": "short", 
+            "required": True, 
+            "placeholder": "Enza | 285906", 
+            "min_length": None, "max_length": None, "options": []
+        },
+        {
+            "type": "text_input", 
+            "label": "Ваш средний онлайн + часовой пояс?", 
+            "custom_id": "online_tz", 
+            "style": "short", 
+            "required": True, 
+            "placeholder": "5ч | +2 от мск", 
+            "min_length": None, "max_length": None, "options": []
+        },
+        {
+            "type": "text_input", 
+            "label": "Скрин ваших персонажей (imgur/yapix)", 
+            "custom_id": "chars_screen", 
+            "style": "paragraph", 
+            "required": True, 
+            "placeholder": "link", 
+            "min_length": None, "max_length": None, "options": []
+        },
+        {
+            "type": "text_input", 
+            "label": "Откат гг от 5 минут тяги (YOUTUBE/RUTUBE)", 
+            "custom_id": "rollback_link", 
+            "style": "paragraph", 
+            "required": True, 
+            "placeholder": "link", 
+            "min_length": None, "max_length": None, "options": []
+        }
     ]
+
+
+
+# ========== УПРАВЛЕНИЕ ID ОБЪЯВЛЕНИЯ (НОВОЕ) ==========
+def save_announcement_message_id(msg_id: int):
+    """Сохраняет ID объявления об открытии набора"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)', ('announcement_msg_id', str(msg_id)))
+
+
+def get_announcement_message_id() -> Optional[int]:
+    """Возвращает ID объявления (или None)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT value FROM config WHERE key = ?', ('announcement_msg_id',))
+        row = cursor.fetchone()
+        return int(row['value']) if row else None
+
+
+def clear_announcement_message_id():
+    """Удаляет сохранённый ID объявления"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM config WHERE key = ?', ('announcement_msg_id',))
+
 
 # ========== ОТПУСКА ==========
 def save_vacation_data(user_id, roles_list, start_date, end_date, reason):
@@ -173,6 +254,7 @@ def save_vacation_data(user_id, roles_list, start_date, end_date, reason):
             VALUES (?, ?, ?, ?, ?)
         ''', (user_id, roles_json, start_date, end_date, reason))
 
+
 def get_vacation_data(user_id):
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -181,13 +263,16 @@ def get_vacation_data(user_id):
     if result: return json.loads(result['roles_data'])
     return None
 
+
 def delete_vacation_data(user_id):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM vacations WHERE user_id = ?', (user_id,))
 
 
+
 # ========== РОЗЫГРЫШИ (ОБНОВЛЕНО) ==========
+
 
 def load_giveaway_data() -> Optional[Dict]:
     """Получить последний активный розыгрыш"""
@@ -231,6 +316,7 @@ def load_giveaway_data() -> Optional[Dict]:
         "thumbnail_url": row['thumbnail_url']
     }
 
+
 def save_giveaway_data(data: Dict):
     """Сохранить или обновить данные розыгрыша"""
     with get_db_connection() as conn:
@@ -268,8 +354,10 @@ def save_giveaway_data(data: Dict):
         logger.info(f"Розыгрыш {data.get('id')} сохранён")
 
 
+
 # ========== СТАТУС ЗАЯВОК ==========
 STATUS_FILE = "applications_status.json"
+
 
 def get_applications_status():
     if not os.path.exists(STATUS_FILE):
@@ -281,11 +369,13 @@ def get_applications_status():
             return data.get("enabled", True)
     except: return True
 
+
 def set_applications_status(enabled: bool):
     try:
         with open(STATUS_FILE, "w", encoding="utf-8") as f:
             json.dump({"enabled": enabled}, f, ensure_ascii=False, indent=4)
     except: pass
+
 
 # Инициализация при старте
 init_db()

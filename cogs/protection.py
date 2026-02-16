@@ -141,14 +141,14 @@ def remove_from_whitelist(user_id):
 # --- CONSTANTS & UI ---
 
 EVENT_EMOJIS = {
-    "channel_delete": "🗑️",
-    "channel_create": "➕",
-    "webhook_create": "🔗",
-    "webhook_send": "📨",
-    "ban_member": "🔨",
-    "kick_member": "👢",
-    "everyone_ping": "📢",
-    "here_ping": "👇"
+    "channel_delete": "<:freeicondelete3625005:1472679616589205604>",
+    "channel_create": "<:freeiconplus1828819:1472681225935392858>",
+    "webhook_create": "<:link:1472654744316018843>",
+    "webhook_send": "<:freeiconsending1149588:1472654727257788559>",
+    "ban_member": "<:ban:1472654052763500584>",
+    "kick_member": "<:freeiconblooddrop893529:1472654677735637145>",
+    "everyone_ping": "<:emoji:1472654055343001833>",
+    "here_ping": "<:freeiconnotification1827370:1472654716537409537>"
 }
 
 ACTION_NAMES = {
@@ -161,12 +161,12 @@ ACTION_NAMES = {
 }
 
 ACTION_EMOJIS = {
-    "ban": "⛔",
-    "kick": "👢",
-    "warn": "⚠️",
-    "tempban": "⏳",
-    "none": "⚪",
-    "delete": "🗑️"
+    "ban": "<:ban:1472654052763500584>",
+    "kick": "<:freeiconblooddrop893529:1472654677735637145>",
+    "warn": "<:freeiconalert8452627:1472654676351778816>",
+    "tempban": "<:freeiconclock12476999:1472654689815232834>",
+    "none": "<:tik:1472654073814581268>",
+    "delete": "<:freeicondelete3625005:1472679616589205604>"
 }
 
 config = load_config()
@@ -190,11 +190,11 @@ class ActionSelect(View):
         select = Select(
             placeholder="Выберите действие",
             options=[
-                SelectOption(label="Бан", value="ban", emoji="⛔"),
-                SelectOption(label="Кик", value="kick", emoji="👢"),
-                SelectOption(label="Предупреждение", value="warn", emoji="⚠️"),
-                SelectOption(label="Временный бан", value="tempban", emoji="⏳"),
-                SelectOption(label="Без действий", value="none", emoji="⚪")
+                SelectOption(label="Бан", value="ban", emoji="<:ban:1472654052763500584>"),
+                SelectOption(label="Кик", value="kick", emoji="<:freeiconblooddrop893529:1472654677735637145>"),
+                SelectOption(label="Предупреждение", value="warn", emoji="<:freeiconalert8452627:1472654676351778816>"),
+                SelectOption(label="Временный бан", value="tempban", emoji="<:freeiconclock12476999:1472654689815232834>"),
+                SelectOption(label="Без действий", value="none", emoji="<:tik:1472654073814581268>")
             ]
         )
         select.callback = self.select_callback
@@ -281,14 +281,14 @@ class ProtectionConfigView(View):
         placeholder="Выберите событие для настройки",
         custom_id="protection_event_select",
         options=[
-            disnake.SelectOption(label="Удаление канала", value="channel_delete", description="Массовое удаление текстовых каналов", emoji="🗑️"),
-            disnake.SelectOption(label="Создание канала", value="channel_create", description="Массовое создание текстовых каналов ", emoji="➕"),
-            disnake.SelectOption(label="Создание вебхука", value="webhook_create", description="Создание интеграции & Вебхука", emoji="🔗"),
-            disnake.SelectOption(label="Отправка от вебхука", value="webhook_send", description="Взаимодействие с URL вебхука", emoji="📨"),
-            disnake.SelectOption(label="Бан участника", value="ban_member", description="Реакция на массовые блокировки участников", emoji="🔨"),
-            disnake.SelectOption(label="Кик участника", value="kick_member", description="Защита от массовых исключений участников", emoji="👢"),
-            disnake.SelectOption(label="Пинг @everyone", value="everyone_ping", description="Ограничение упоминаний роли @everyone", emoji="📢"),
-            disnake.SelectOption(label="Пинг @here", value="here_ping", description="Ограничение упоминаний роли @here", emoji="👇")
+            disnake.SelectOption(label="Удаление канала", value="channel_delete", description="Массовое удаление текстовых каналов", emoji="<:freeicondelete3625005:1472679616589205604>"),
+            disnake.SelectOption(label="Создание канала", value="channel_create", description="Массовое создание текстовых каналов ", emoji="<:freeiconplus1828819:1472681225935392858>"),
+            disnake.SelectOption(label="Создание вебхука", value="webhook_create", description="Создание интеграции & Вебхука", emoji="<:link:1472654744316018843>"),
+            disnake.SelectOption(label="Отправка от вебхука", value="webhook_send", description="Взаимодействие с URL вебхука", emoji="<:freeiconsending1149588:1472654727257788559>"),
+            disnake.SelectOption(label="Бан участника", value="ban_member", description="Реакция на массовые блокировки участников", emoji="<:ban:1472654052763500584>"),
+            disnake.SelectOption(label="Кик участника", value="kick_member", description="Защита от массовых исключений участников", emoji="<:freeiconblooddrop893529:1472654677735637145>"),
+            disnake.SelectOption(label="Пинг @everyone", value="everyone_ping", description="Ограничение упоминаний роли @everyone", emoji="<:emoji:1472654055343001833>"),
+            disnake.SelectOption(label="Пинг @here", value="here_ping", description="Ограничение упоминаний роли @here", emoji="<:freeiconnotification1827370:1472654716537409537>")
         ]
     )
     async def event_select(self, select: disnake.ui.Select, interaction: disnake.Interaction):
@@ -298,11 +298,17 @@ class ProtectionConfigView(View):
         
         event_key = select.values[0]
         view = ActionSelect(event_key)
+        
+        # 1. Отправляем меню настройки (эфемерно)
         await interaction.response.send_message(
             f"Настройка: **{EVENTS.get(event_key, event_key)}**", 
             view=view, 
             ephemeral=True
         )
+        
+        # 2. СБРОС СЕЛЕКТА НА ОСНОВНОМ СООБЩЕНИИ
+        await interaction.message.edit(view=self)
+
 
     @disnake.ui.button(label="Вайтлист", style=ButtonStyle.grey, custom_id="protection_whitelist")
     async def whitelist_button(self, button: Button, interaction: Interaction):
@@ -317,6 +323,7 @@ class ProtectionConfigView(View):
         embed = disnake.Embed(title="Вайтлист защиты", description=text, color=disnake.Color.from_rgb(54, 57, 63))
         view = WhitelistView(interaction.guild.owner.id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 
 class WhitelistView(View):
     def __init__(self, owner_id):
@@ -474,7 +481,7 @@ class ActionConfigModal(Modal):
             description=(
                 f"Событие: **{EVENTS.get(self.event_key)}**\n"
                 f"Наказание: `{ACTION_NAMES.get(self.action)}`\n"
-                f"Лимит действий: ⚠️ `{limit_val}`" + time_text
+                f"Лимит действий:  <:freeiconalert8452627:1472654676351778816> `{limit_val}`" + time_text
             ),
             color=disnake.Color.from_rgb(54, 57, 63)
         )
@@ -685,17 +692,5 @@ class ProtectionCog(commands.Cog):
                 pass
             return
 
-    # --- COMMANDS ---
-    @commands.command(name="protection", aliases=["anticrash", "ac"])
-    @commands.has_permissions(administrator=True)
-    async def protection_panel(self, ctx):
-        await ctx.message.delete()
-        
-        # Принудительное обновление панели
-        await update_protection_panel(ctx.guild)
-        
-        # Поскольку update_protection_panel отправляет сообщение сама, нам тут больше ничего делать не надо,
-        # кроме как убедиться, что она отработала.
-        
 def setup(bot):
     bot.add_cog(ProtectionCog(bot))

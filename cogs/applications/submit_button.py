@@ -49,7 +49,7 @@ class ApplicationSelect(Select):
             
             if not form_config:
                 await interaction.response.send_message(
-                    embed=Embed(title="❌ Ошибка", description="Форма не настроена.", color=0xED4245),
+                    embed=Embed(title="Ошибка", description="Форма не настроена.", color=0xED4245),
                     ephemeral=True
                 )
                 await self.reset_view(interaction.message)
