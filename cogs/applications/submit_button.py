@@ -1,9 +1,12 @@
 import asyncio
+import disnake
 from disnake import Embed, Interaction, SelectOption
 from disnake.ui import View, Select
 from database import get_application_form, get_applications_status
 from .utils import migrate_old_form_data
 from .form_modal import CompleteApplicationModal
+# Импортируем константу (убедитесь, что путь к constants верный)
+from constants import ACCEPT_ROLE_ID 
 
 class ApplicationSelect(Select):
     def __init__(self, bot):
@@ -33,13 +36,26 @@ class ApplicationSelect(Select):
         )
 
     async def callback(self, interaction: Interaction):
-        # 1. Проверка статуса
+        # 1. Проверка на наличие роли "в семье" (ACCEPT_ROLE_ID)
+        if any(role.id == ACCEPT_ROLE_ID for role in interaction.user.roles):
+            await interaction.response.send_message(
+                embed=Embed(
+                    title="Ошибка", 
+                    description="Вы уже находитесь в семье!", 
+                    color=disnake.Color.from_rgb(54, 57, 63)
+                ),
+                ephemeral=True
+            )
+            # Сбрасываем меню, чтобы убрать синее выделение
+            asyncio.create_task(self.reset_view(interaction.message))
+            return
+
+        # 2. Проверка статуса набора
         if not get_applications_status():
              await interaction.response.send_message(
                 embed=Embed(title="⛔ Набор закрыт", description="Прием заявок приостановлен.", color=0xED4245),
                 ephemeral=True
             )
-             # Сбрасываем меню даже при отказе
              await self.reset_view(interaction.message)
              return
 
@@ -55,20 +71,17 @@ class ApplicationSelect(Select):
                 await self.reset_view(interaction.message)
                 return
             
-            # 2. Открываем модалку
-            # Мы передаем message_to_reset=None в модалку, так как сброс сделаем здесь
+            # 3. Открываем модалку
             await interaction.response.send_modal(CompleteApplicationModal(self.bot, form_config, message_to_reset=None))
             
-            # 3. ЗАПУСКАЕМ СБРОС МЕНЮ В ФОНЕ
-            # Это сработает параллельно и вернет меню в исходное состояние (Placeholder)
+            # 4. ЗАПУСКАЕМ СБРОС МЕНЮ В ФОНЕ
             asyncio.create_task(self.reset_view(interaction.message))
 
     async def reset_view(self, message):
         """Сбрасывает View сообщения через небольшую паузу"""
         if not message: return
         try:
-            await asyncio.sleep(0.5) # Небольшая задержка, чтобы API успел обработать модалку
-            # Пересоздаем View, чтобы сбросить выбор в Select
+            await asyncio.sleep(0.5)
             await message.edit(view=ApplicationChannelView(self.bot))
         except Exception as e:
             print(f"[AppSelect] Ошибка сброса меню: {e}")

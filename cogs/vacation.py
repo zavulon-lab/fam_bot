@@ -60,7 +60,7 @@ class VacationModal(Modal):
             log_channel = guild.get_channel(VACATION_LOG_CHANNEL_ID)
             if log_channel:
                 embed_log = Embed(title="<:freeiconcoconuttree3226180:1472661945537789963> Уход в отпуск", color=disnake.Color.from_rgb(54, 57, 63), timestamp=datetime.now())
-                embed_log.add_field(name="Пользователь", value=f"{user.mention} ({user.id})")
+                embed_log.add_field(name="Пользователь", value=f"{user.mention}\nID: {user.id}", inline=False)
                 embed_log.add_field(name="Ник", value=nick, inline=True)
                 embed_log.add_field(name="Сроки", value=date_range, inline=True)
                 embed_log.add_field(name="Причина", value=reason, inline=False)

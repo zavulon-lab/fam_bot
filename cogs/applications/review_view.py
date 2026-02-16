@@ -376,21 +376,9 @@ class ApplicationReviewView(View):
                 dm_status = "Ошибка отправки ЛС."
 
             # Итоговое сообщение (удаляется через 20 секунд)
-            await interaction.followup.send(
-                f"Чат создан: {chan.mention}\n{dm_status}", 
-                ephemeral=True, 
-                delete_after=20
-            )
-
         except Exception as e:
             await interaction.followup.send(
-                f"Ошибка при создании чата: {e}", 
-                ephemeral=True, 
+                f"Ошибка при создании чата: {e}",
+                ephemeral=True,
                 delete_after=20
             )
-
-
-            await interaction.followup.send(f"Чат создан: {chan.mention}\n{dm_status}", ephemeral=True)
-
-        except Exception as e:
-            await interaction.followup.send(f"Ошибка при создании чата: {e}", ephemeral=True)

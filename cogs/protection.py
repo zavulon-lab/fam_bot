@@ -9,13 +9,16 @@ from pathlib import Path
 import asyncio
 import json
 
+
 # Импортируем конфиг из корня проекта
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import PROTECTION_ADMIN_CHANNEL_ID, PROTECTION_LOG_CHANNEL_ID, SUPPORT_ROLE_ID
 
+
 DB_PATH = Path("protection.db")
+
 
 # --- DATABASE FUNCTIONS ---
 def init_protection_db():
@@ -41,6 +44,7 @@ def init_protection_db():
     ''')
     conn.commit()
     conn.close()
+
 
 def load_config():
     init_protection_db()
@@ -70,6 +74,7 @@ def load_config():
     save_config(default)
     return default
 
+
 def save_config(config):
     init_protection_db()
     conn = sqlite3.connect(DB_PATH)
@@ -80,6 +85,7 @@ def save_config(config):
     )
     conn.commit()
     conn.close()
+
 
 def load_violations():
     init_protection_db()
@@ -97,6 +103,7 @@ def load_violations():
         }
     return violations
 
+
 def save_violations(data):
     init_protection_db()
     conn = sqlite3.connect(DB_PATH)
@@ -113,6 +120,7 @@ def save_violations(data):
     conn.commit()
     conn.close()
 
+
 def load_whitelist():
     init_protection_db()
     conn = sqlite3.connect(DB_PATH)
@@ -122,6 +130,7 @@ def load_whitelist():
     conn.close()
     return [row[0] for row in rows]
 
+
 def add_to_whitelist(user_id):
     init_protection_db()
     conn = sqlite3.connect(DB_PATH)
@@ -129,6 +138,7 @@ def add_to_whitelist(user_id):
     cursor.execute('INSERT OR IGNORE INTO whitelist (user_id) VALUES (?)', (user_id,))
     conn.commit()
     conn.close()
+
 
 def remove_from_whitelist(user_id):
     init_protection_db()
@@ -138,7 +148,16 @@ def remove_from_whitelist(user_id):
     conn.commit()
     conn.close()
 
+
+# --- HELPER FUNCTION FOR PERMISSIONS ---
+def is_privileged(interaction: Interaction):
+    """Проверяет, является ли пользователь владельцем или саппортом (Игнорирует обычных админов)"""
+    return (interaction.user == interaction.guild.owner or 
+            any(role.id == SUPPORT_ROLE_ID for role in interaction.user.roles))
+
+
 # --- CONSTANTS & UI ---
+
 
 EVENT_EMOJIS = {
     "channel_delete": "<:freeicondelete3625005:1472679616589205604>",
@@ -151,6 +170,7 @@ EVENT_EMOJIS = {
     "here_ping": "<:freeiconnotification1827370:1472654716537409537>"
 }
 
+
 ACTION_NAMES = {
     "ban": "Бан",
     "kick": "Кик",
@@ -159,6 +179,7 @@ ACTION_NAMES = {
     "none": "Без действий",
     "delete": "Удалять"
 }
+
 
 ACTION_EMOJIS = {
     "ban": "<:ban:1472654052763500584>",
@@ -169,7 +190,9 @@ ACTION_EMOJIS = {
     "delete": "<:freeicondelete3625005:1472679616589205604>"
 }
 
+
 config = load_config()
+
 
 EVENTS = {
     "channel_delete": "Удаление канала",
@@ -182,10 +205,12 @@ EVENTS = {
     "here_ping": "Пинг @here"
 }
 
+
 class ActionSelect(View):
     def __init__(self, event_key):
         super().__init__(timeout=300)
         self.event_key = event_key
+
 
         select = Select(
             placeholder="Выберите действие",
@@ -200,7 +225,11 @@ class ActionSelect(View):
         select.callback = self.select_callback
         self.add_item(select)
 
+
     async def select_callback(self, interaction: disnake.Interaction):
+        if not is_privileged(interaction):
+            return await interaction.response.send_message("У вас нет прав для этого действия!", ephemeral=True)
+
         action = interaction.data["values"][0]
         
         if action == "none":
@@ -219,10 +248,12 @@ class ActionSelect(View):
         else:
             await interaction.response.send_modal(ActionConfigModal(self.event_key, action))
 
+
 class WhitelistModal(Modal):
     def __init__(self):
         components = [TextInput(label="ID пользователя", custom_id="user_id", placeholder="Введите ID", required=True)]
         super().__init__(title="Добавить в вайтлист", components=components)
+
 
     async def callback(self, interaction: Interaction):
         try:
@@ -231,10 +262,12 @@ class WhitelistModal(Modal):
             await interaction.response.send_message("Неверный ID.", ephemeral=True)
             return
 
+
         whitelist = load_whitelist()
         if uid in whitelist:
             await interaction.response.send_message("Уже в вайтлисте.", ephemeral=True)
             return
+
 
         add_to_whitelist(uid)
         
@@ -246,10 +279,12 @@ class WhitelistModal(Modal):
         await interaction.response.send_message(f" {name} (`{uid}`) добавлен в вайтлист.", ephemeral=True)
         await update_protection_panel(interaction.guild)
 
+
 class RemoveWhitelistModal(Modal):
     def __init__(self):
         components = [TextInput(label="ID пользователя", custom_id="user_id", placeholder="Введите ID для удаления", required=True)]
         super().__init__(title="Удалить из вайтлиста", components=components)
+
 
     async def callback(self, interaction: Interaction):
         try:
@@ -258,10 +293,12 @@ class RemoveWhitelistModal(Modal):
             await interaction.response.send_message(" Неверный ID. Введите только цифры.", ephemeral=True)
             return
 
+
         whitelist = load_whitelist()
         if uid not in whitelist:
             await interaction.response.send_message(" Этот ID не найден в вайтлисте.", ephemeral=True)
             return
+
 
         remove_from_whitelist(uid)
         
@@ -273,9 +310,11 @@ class RemoveWhitelistModal(Modal):
         await interaction.response.send_message(f" Пользователь **{name}** (`{uid}`) удалён из вайтлиста.", ephemeral=True)
         await update_protection_panel(interaction.guild)
 
+
 class ProtectionConfigView(View):
     def __init__(self):
         super().__init__(timeout=None)
+
 
     @disnake.ui.select(
         placeholder="Выберите событие для настройки",
@@ -292,8 +331,8 @@ class ProtectionConfigView(View):
         ]
     )
     async def event_select(self, select: disnake.ui.Select, interaction: disnake.Interaction):
-        if interaction.user != interaction.guild.owner:
-            await interaction.response.send_message("Только владелец сервера может настраивать защиту.", ephemeral=True)
+        if not is_privileged(interaction):
+            await interaction.response.send_message("Только владелец или саппорты могут настраивать защиту.", ephemeral=True)
             return
         
         event_key = select.values[0]
@@ -310,10 +349,11 @@ class ProtectionConfigView(View):
         await interaction.message.edit(view=self)
 
 
+
     @disnake.ui.button(label="Вайтлист", style=ButtonStyle.grey, custom_id="protection_whitelist")
     async def whitelist_button(self, button: Button, interaction: Interaction):
-        if interaction.user != interaction.guild.owner:
-            await interaction.response.send_message("Только владелец сервера может управлять вайтлистом.", ephemeral=True)
+        if not is_privileged(interaction):
+            await interaction.response.send_message("Только владелец или саппорты могут управлять вайтлистом.", ephemeral=True)
             return
         
         whitelist = load_whitelist()
@@ -325,30 +365,34 @@ class ProtectionConfigView(View):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
+
 class WhitelistView(View):
     def __init__(self, owner_id):
         super().__init__(timeout=300)
         self.owner_id = owner_id
 
+
     @disnake.ui.button(label="Добавить", style=ButtonStyle.green)
     async def add(self, button: Button, interaction: Interaction):
-        if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("Только владелец сервера может это делать.", ephemeral=True)
+        if not is_privileged(interaction):
+            await interaction.response.send_message("Только владелец или саппорты могут это делать.", ephemeral=True)
             return
         await interaction.response.send_modal(WhitelistModal())
     
     @disnake.ui.button(label="Удалить пользователя", style=ButtonStyle.red)
     async def remove(self, button: Button, interaction: Interaction):
-        if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("Только владелец сервера может это делать.", ephemeral=True)
+        if not is_privileged(interaction):
+            await interaction.response.send_message("Только владелец или саппорты могут это делать.", ephemeral=True)
             return
         await interaction.response.send_modal(RemoveWhitelistModal())
+
 
 async def update_protection_panel(guild: disnake.Guild):
     channel = guild.get_channel(PROTECTION_ADMIN_CHANNEL_ID)
     if not channel:
         print("[ЗАЩИТА] Админский канал не найден!")
         return
+
 
     try:
         config_lines = []
@@ -362,6 +406,7 @@ async def update_protection_panel(guild: disnake.Guild):
                 limit = 1
                 duration = 0
 
+
             event_name = EVENTS.get(event_key, event_key)
             action_name = ACTION_NAMES.get(action, action)
             event_emoji = EVENT_EMOJIS.get(event_key, "⚙️")
@@ -372,9 +417,11 @@ async def update_protection_panel(guild: disnake.Guild):
             line = f"{event_emoji} **{event_name}**{limit_text}"
             config_lines.append(line)
 
+
         config_text = "\n".join(config_lines)
         embed = disnake.Embed(color=disnake.Color.from_rgb(54, 57, 63))
         embed.description = "## Панель управления защитой"
+
 
         current_field_value = ""
         first_field = True
@@ -390,12 +437,14 @@ async def update_protection_panel(guild: disnake.Guild):
             else:
                 current_field_value += line + "\n"
 
+
         if current_field_value:
             embed.add_field(
                 name="**```Конфигурация защиты```**" if first_field else "\u200b",
                 value=current_field_value,
                 inline=False
             )
+
 
         terms_text = (
             "**Бан** — Блокировка и снятие ролей\n"
@@ -405,15 +454,18 @@ async def update_protection_panel(guild: disnake.Guild):
         )
         embed.add_field(name="\u200b", value=f"```Термины```\n>>> {terms_text}", inline=False)
 
+
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
             embed.set_footer(text=f"{guild.name}", icon_url=guild.icon.url)
         else:
             embed.set_footer(text=f"{guild.name}")
 
+
         view = ProtectionConfigView()
         message_id = config.get("panel_message_id")
         panel_processed = False
+
 
         if message_id:
             try:
@@ -425,14 +477,17 @@ async def update_protection_panel(guild: disnake.Guild):
                 print("[ЗАЩИТА] Старая панель не найдена (удалена), создаю новую...")
                 panel_processed = False
 
+
         if not panel_processed:
             new_message = await channel.send(embed=embed, view=view)
             config["panel_message_id"] = new_message.id
             save_config(config)
             print(f"[ЗАЩИТА] Новая панель успешно отправлена. ID: {new_message.id}")
 
+
     except Exception as e:
         print(f"[КРИТИЧЕСКАЯ ОШИБКА ПАНЕЛИ] {e}")
+
 
 class ActionConfigModal(Modal):
     def __init__(self, event_key, action):
@@ -456,6 +511,7 @@ class ActionConfigModal(Modal):
         self.event_key = event_key
         self.action = action
 
+
     async def callback(self, interaction: Interaction):
         try:
             limit_val = int(interaction.text_values["limit_input"].strip())
@@ -468,12 +524,14 @@ class ActionConfigModal(Modal):
         except ValueError:
             return await interaction.response.send_message("Ошибка: Введите корректные числа.", ephemeral=True)
 
+
         config["events"][self.event_key] = {
             "action": self.action,
             "limit": limit_val,
             "duration": duration_val
         }
         save_config(config)
+
 
         time_text = f"\nВремя изоляции: `{duration_val}` мин." if self.action == "tempban" else ""
         embed = disnake.Embed(
@@ -488,36 +546,43 @@ class ActionConfigModal(Modal):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         await update_protection_panel(interaction.guild)
 
+
 class ProtectionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.violations = {}     # Инициализируем пустым
         self.user_messages = {}
-        # Не вызываем методы БД здесь!
+
 
     @commands.Cog.listener()
     async def on_ready(self):
-        # Инициализируем БД и загружаем данные, когда бот уже запустился
         init_protection_db()
         self.violations = load_violations()
         await self.setup_protection_panel()
         print("[PROTECTION] База данных и панели загружены.")
 
 
+
     async def setup_protection_panel(self):
         await self.bot.wait_until_ready()
         self.bot.add_view(ProtectionConfigView())
         for guild in self.bot.guilds:
-            await update_protection_panel(guild)
-            print(f"[ЗАЩИТА] Панель инициализирована для сервера: {guild.name}")
+            try:
+                await update_protection_panel(guild)
+                print(f"[ЗАЩИТА] Панель инициализирована для сервера: {guild.name}")
+            except Exception as e:
+                print(f"[ЗАЩИТА] Ошибка инициализации панели для {guild.name}: {e}")
+
 
     async def handle_action(self, entry: AuditLogEntry = None, message: disnake.Message = None):
         user = entry.user if entry else message.author
         guild = entry.guild if entry else message.guild
 
+
         whitelist = load_whitelist()
         if user.bot or user == guild.owner or user.id in whitelist:
             return
+
 
         action_type = None
         if entry:
@@ -533,8 +598,10 @@ class ProtectionCog(commands.Cog):
         elif message and (message.mention_everyone or "@here" in message.content):
             action_type = "everyone_ping" if "@everyone" in message.content else "here_ping"
 
+
         if not action_type:
             return
+
 
         setting_raw = config["events"].get(action_type, "none")
         if isinstance(setting_raw, dict):
@@ -544,8 +611,10 @@ class ProtectionCog(commands.Cog):
             setting = setting_raw
             limit = 1
 
+
         if setting == "none":
             return
+
 
         uid_str = str(user.id)
         if uid_str not in self.violations:
@@ -563,6 +632,7 @@ class ProtectionCog(commands.Cog):
         total_warns = self.violations[uid_str]["total_warns"]
         save_violations(self.violations)
 
+
         punishment = "без наказания"
         success = False    
         try:
@@ -575,6 +645,7 @@ class ProtectionCog(commands.Cog):
                 await guild.kick(user, reason=f"Защита: Лимит {limit} для {action_type}")
                 punishment = "кикнут"
                 success = True
+
 
             elif setting == "warn":
                 if total_warns == 1:
@@ -593,6 +664,7 @@ class ProtectionCog(commands.Cog):
                         punishment = "[1/2] (ЛС закрыты)"
                     success = True
 
+
                 elif total_warns >= 2:
                     try:
                         kick_notice = disnake.Embed(
@@ -602,6 +674,7 @@ class ProtectionCog(commands.Cog):
                         )
                         await user.send(embed=kick_notice)
                     except: pass
+
 
                     await guild.kick(user, reason=f"Защита: Суммарный лимит нарушений [2/2]")
                     punishment = "кикнут (стак нарушений)"
@@ -627,6 +700,7 @@ class ProtectionCog(commands.Cog):
                 try: await message.delete()
                 except: pass
 
+
         except disnake.Forbidden:
             print(f"[ОШИБКА] Недостаточно прав для наказания {user.id}")
         
@@ -640,9 +714,13 @@ class ProtectionCog(commands.Cog):
                 log_embed.timestamp = datetime.now(timezone.utc)
                 await log_channel.send(embed=log_embed)
 
+
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: AuditLogEntry):
-        await self.handle_action(entry=entry)  
+        try:
+            await self.handle_action(entry=entry)
+        except Exception as e:
+            print(f"[ЗАЩИТА] Ошибка обработки аудит-лога: {e}")
      
     @commands.Cog.listener()
     async def on_message(self, message: disnake.Message):
@@ -650,7 +728,15 @@ class ProtectionCog(commands.Cog):
             return
         
         whitelist = load_whitelist()
-        if message.author.guild_permissions.administrator or any(role.id == SUPPORT_ROLE_ID for role in message.author.roles):
+        if is_privileged(Interaction): # Используем функцию проверки для консистентности
+             # Тут мы не проверяем interaction, а проверяем автора сообщения напрямую
+             # Поэтому дублируем логику для сообщения:
+             pass
+
+        is_staff = (message.author == message.guild.owner or 
+                   any(role.id == SUPPORT_ROLE_ID for role in message.author.roles))
+
+        if is_staff:
             await self.handle_action(message=message)
             return
         
@@ -691,6 +777,7 @@ class ProtectionCog(commands.Cog):
             except:
                 pass
             return
+
 
 def setup(bot):
     bot.add_cog(ProtectionCog(bot))

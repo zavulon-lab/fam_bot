@@ -139,7 +139,7 @@ class VerificationAdminButtons(View):
                 target_member: PermissionOverwrite(read_messages=True, send_messages=True) # Юзер - можно
             }
 
-            channel_name = f"verify-{target_member.display_name}"
+            channel_name = f"verify-{target_member.display_name[:80]}"  # Ограничиваем длину имени канала
             new_channel = await interaction.guild.create_text_channel(
                 name=channel_name,
                 category=category,
@@ -171,9 +171,10 @@ class VerificationAdminButtons(View):
             button.style = ButtonStyle.secondary
             
             embed = interaction.message.embeds[0]
-            embed.add_field(name="Статус", value=f"В процессе (Канал: {new_channel.mention})", inline=False)
-            
-            await interaction.message.edit(embed=embed, view=self)
+            if embed:
+                embed.add_field(name="Статус", value=f"В процессе (Канал: {new_channel.mention})", inline=False)
+                
+                await interaction.message.edit(embed=embed, view=self)
 
             notification_channel = interaction.guild.get_channel(VERIFICATION_NOTIFICATION_CHANNEL_ID)
             if notification_channel:

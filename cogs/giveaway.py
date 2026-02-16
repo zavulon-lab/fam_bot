@@ -143,12 +143,16 @@ class GiveawayPreviewView(View):
 
         # Отправка нового
         embed = create_giveaway_embed(self.data, interaction.bot.user)
-        msg = await channel.send(embed=embed, view=GiveawayJoinView(self.data["id"]))
-        
-        self.data["fixed_message_id"] = msg.id
-        save_giveaway_data(self.data)
-        
-        await interaction.response.edit_message(content=f"Розыгрыш опубликован! [Перейти]({msg.jump_url})", view=None, embed=None)
+        try:
+            msg = await channel.send(embed=embed, view=GiveawayJoinView(self.data["id"]))
+            
+            self.data["fixed_message_id"] = msg.id
+            save_giveaway_data(self.data)
+            
+            await interaction.response.edit_message(content=f"Розыгрыш опубликован! [Перейти]({msg.jump_url})", view=None, embed=None)
+        except Exception as e:
+            print(f"[GIVEAWAY] Ошибка отправки розыгрыша: {e}")
+            await interaction.response.edit_message(content="Ошибка при публикации розыгрыша.", view=None, embed=None)
 
     @disnake.ui.button(label="Отмена", style=ButtonStyle.danger, emoji="<:cross:1472654174788255996>")
     async def cancel(self, button: Button, interaction: Interaction):

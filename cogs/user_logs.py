@@ -22,12 +22,12 @@ class UserLogsCog(commands.Cog):
     async def send_log(self, channel_id: int, embed: disnake.Embed):
         if not channel_id:
             return
-        channel = self.bot.get_channel(channel_id)
-        if channel and isinstance(channel, disnake.TextChannel):
-            try:
+        try:
+            channel = self.bot.get_channel(channel_id)
+            if channel and isinstance(channel, disnake.TextChannel):
                 await channel.send(embed=embed)
-            except Exception as e:
-                print(f"[USER_LOGS] Ошибка отправки в канал {channel_id}: {e}")
+        except Exception as e:
+            print(f"[USER_LOGS] Ошибка отправки в канал {channel_id}: {e}")
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: disnake.Message):

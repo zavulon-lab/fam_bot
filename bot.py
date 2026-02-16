@@ -44,8 +44,13 @@ def load_cogs():
 
             cog_name = item[:-3]
             try:
-                bot.load_extension(f'cogs.{cog_name}')
-                print(f'Загружен ког (файл): {cog_name}')
+                full_cog_name = f'cogs.{cog_name}'
+                if full_cog_name in bot.extensions:
+                    bot.reload_extension(full_cog_name)
+                    print(f'Перезагружен ког (файл): {cog_name}')
+                else:
+                    bot.load_extension(full_cog_name)
+                    print(f'Загружен ког (файл): {cog_name}')
             except Exception as e:
                 print(f'Ошибка загрузки {cog_name}: {e}')
                 # Выводим полный текст ошибки для отладки
@@ -55,8 +60,13 @@ def load_cogs():
         elif os.path.isdir(item_path) and not item.startswith('_') and not item.startswith('.'):
             if os.path.exists(os.path.join(item_path, '__init__.py')):
                 try:
-                    bot.load_extension(f'cogs.{item}')
-                    print(f'Загружен ког (пакет): {item}')
+                    full_cog_name = f'cogs.{item}'
+                    if full_cog_name in bot.extensions:
+                        bot.reload_extension(full_cog_name)
+                        print(f'Перезагружен ког (пакет): {item}')
+                    else:
+                        bot.load_extension(full_cog_name)
+                        print(f'Загружен ког (пакет): {item}')
                 except Exception as e:
                     print(f'Ошибка загрузки пакета {item}: {e}')
                     import traceback

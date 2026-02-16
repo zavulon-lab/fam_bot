@@ -27,7 +27,7 @@ try:
     try: from constants import EVENTS_PRIORITY_ROLE_ID
     except: EVENTS_PRIORITY_ROLE_ID = 123456789012345678
     
-    VOD_SUBMIT_CHANNEL_ID = 1438619916159942819 
+    VOD_SUBMIT_CHANNEL_ID = 1472985007403307191 
     
 except ImportError:
     EVENTS_CHANNEL_ID = 0
@@ -38,7 +38,7 @@ except ImportError:
     EVENT_VOICE_CHANNEL_ID = 1469489179766292755
     EVENTS_TAG_CHANNEL_ID = 1469491042679128164
     EVENTS_PRIORITY_ROLE_ID = 123456789012345678
-    VOD_SUBMIT_CHANNEL_ID = 1438619916159942819
+    VOD_SUBMIT_CHANNEL_ID = 1472985007403307191
 
 DB_PATH = Path("events.db")
 AUX_COLOR = disnake.Color.from_rgb(54, 57, 63)
@@ -361,18 +361,27 @@ async def update_all_views(bot, data=None):
     admin_chan = bot.get_channel(EVENTS_ADMIN_CHANNEL_ID)
     if admin_chan:
         target_msg = None
-        async for msg in admin_chan.history(limit=10):
-            if msg.author == bot.user and msg.components:
-                 try:
-                     if msg.components[0].children[0].custom_id == "start_reg_btn":
-                         target_msg = msg
-                         break
-                 except: pass
+        try:
+            async for msg in admin_chan.history(limit=10):
+                if msg.author == bot.user and msg.components:
+                    try:
+                        if msg.components[0].children and msg.components[0].children[0].custom_id == "start_reg_btn":
+                            target_msg = msg
+                            break
+                    except (IndexError, AttributeError): pass
+        except Exception:
+            pass
         
         if target_msg:
-            await target_msg.edit(embeds=embeds, view=MainAdminView())
+            try:
+                await target_msg.edit(embeds=embeds, view=MainAdminView())
+            except Exception:
+                pass
         else:
-            await admin_chan.send(embeds=embeds, view=MainAdminView())
+            try:
+                await admin_chan.send(embeds=embeds, view=MainAdminView())
+            except Exception:
+                pass
 
     # Публичный канал
     if data and data.get("message_id"):
@@ -381,7 +390,8 @@ async def update_all_views(bot, data=None):
             if chan:
                 msg = await chan.fetch_message(data["message_id"])
                 await msg.edit(embeds=embeds, view=EventUserView(data["id"]))
-        except: pass
+        except Exception:
+            pass
 
 # --- МОДАЛЬНЫЕ ОКНА ---
 
@@ -814,7 +824,8 @@ class EventUserView(View):
         if any(p["user_id"] == uid for p in all_users):
             return await interaction.response.send_message("Вы уже записаны.", ephemeral=True)
         
-        user_data = {"user_id": uid, "join_time": time.time()}
+        # Ключ назван join_time
+        user_data = {"user_id": uid, "join_time": int(time.time())}
         msg = ""
 
         if uid in wl or has_priority:
@@ -822,7 +833,6 @@ class EventUserView(View):
             msg = "Вы записаны в **ОСНОВУ** (Priority/WL)!"
             struct = push_to_reserve_if_full(struct, data["max_slots"])
         else:
-            # ВСЕ ОСТАЛЬНЫЕ СРАЗУ В РЕЗЕРВ
             struct["reserve"].append(user_data)
             msg = "Вы добавлены в **РЕЗЕРВ**."
         
@@ -832,14 +842,35 @@ class EventUserView(View):
         await log_user_action(interaction.bot, "Вход", f"Статус: {msg}", interaction.user, False)
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @disnake.ui.button(label="Покинуть список", style=ButtonStyle.danger, emoji=EMOJI_LEAVE, custom_id="usr_leave")
+    @disnake.ui.button(label="Покинуть список", style=ButtonStyle.danger, custom_id="usr_leave")
     async def leave(self, button, interaction):
+        await interaction.response.defer(ephemeral=True)
+        
         data = get_event_by_id(self.event_id)
-        if not data: return
+        if not data: 
+            return await interaction.followup.send("Ивент не найден.", ephemeral=True)
         
         struct = get_participants_struct(data)
         uid = interaction.user.id
         
+        all_participants = struct["main"] + struct["reserve"]
+        user_data = next((p for p in all_participants if p["user_id"] == uid), None)
+        
+        if not user_data:
+            return await interaction.followup.send("Вас нет в списке участников.", ephemeral=True)
+        
+        # Исправлено: берем join_time вместо time
+        join_timestamp = user_data.get("join_time", 0)
+        current_time = int(time.time())
+        wait_time = 60
+        
+        if current_time - join_timestamp < wait_time:
+            remaining = wait_time - (current_time - join_timestamp)
+            return await interaction.followup.send(
+                f"Вы не можете покинуть список так быстро! Подождите еще {remaining} сек.", 
+                ephemeral=True
+            )
+
         struct["main"] = [p for p in struct["main"] if p["user_id"] != uid]
         struct["reserve"] = [p for p in struct["reserve"] if p["user_id"] != uid]
         
@@ -848,9 +879,12 @@ class EventUserView(View):
         
         data["participants"] = struct
         save_event(data)
+        
         await update_all_views(interaction.bot, data)
         await log_user_action(interaction.bot, "Выход", "Покинул ивент", interaction.user, True)
-        await interaction.response.send_message("👋 Вы вышли из списка.", ephemeral=True)
+        
+        await interaction.followup.send("Вы вышли из списка.", ephemeral=True)
+
 
 class MainAdminView(View):
     def __init__(self):

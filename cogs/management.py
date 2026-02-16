@@ -54,8 +54,11 @@ class RollbackForm(Modal):
             except Exception as e:
                 return await interaction.followup.send(f"Ошибка доступа к ветке: {e}", ephemeral=True)
 
-        if target_thread.archived:
-            await target_thread.edit(archived=False)
+        if target_thread and target_thread.archived:
+            try:
+                await target_thread.edit(archived=False)
+            except Exception:
+                return await interaction.followup.send("Нет прав для разархивирования ветки.", ephemeral=True)
 
         public_embed = Embed(
             description=f"**Отправитель:** {interaction.user.mention}\n\n{details}",

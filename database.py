@@ -21,17 +21,20 @@ DB_PATH = "bot_data.db"
 @contextmanager
 def get_db_connection():
     """Контекстный менеджер для работы с БД"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = None
     try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
         yield conn
         conn.commit()
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         logger.error(f"Ошибка при работе с БД: {e}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def init_db():
@@ -292,10 +295,9 @@ def load_giveaway_data() -> Optional[Dict]:
     def safe_load_list(val):
         if not val: return []
         try: return json.loads(val)
-        except: 
-            # Обратная совместимость, если там старый формат eval
-            try: return eval(val)
-            except: return []
+        except:
+            # Обратная совместимость, если там старый формат eval (удалено для безопасности)
+            return []
 
     return {
         "id": row['id'],
@@ -334,22 +336,22 @@ def save_giveaway_data(data: Dict):
              preselected_by, preselected_at, finished_at, guild_id, thumbnail_url)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            data.get("id"),
-            data.get("description"),
-            data.get("prize"),
-            data.get("sponsor"),
-            data.get("winner_count", 1),
-            data.get("end_time"),
-            data.get("status", "active"),
-            data.get("fixed_message_id"),
+            str(data.get("id", "")),
+            str(data.get("description", "")),
+            str(data.get("prize", "")),
+            str(data.get("sponsor", "")),
+            int(data.get("winner_count", 1)),
+            str(data.get("end_time", "")),
+            str(data.get("status", "active")),
+            int(data.get("fixed_message_id")) if data.get("fixed_message_id") else None,
             participants_json,
             winners_json,
             preselected_json,
-            data.get("preselected_by"),
-            data.get("preselected_at"),
-            data.get("finished_at"),
-            data.get("guild_id"),
-            data.get("thumbnail_url")
+            int(data.get("preselected_by")) if data.get("preselected_by") else None,
+            str(data.get("preselected_at", "")) if data.get("preselected_at") else None,
+            str(data.get("finished_at", "")) if data.get("finished_at") else None,
+            int(data.get("guild_id")) if data.get("guild_id") else None,
+            str(data.get("thumbnail_url", "")) if data.get("thumbnail_url") else None
         ))
         logger.info(f"Розыгрыш {data.get('id')} сохранён")
 
